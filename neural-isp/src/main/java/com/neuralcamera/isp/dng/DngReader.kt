@@ -42,8 +42,13 @@ class DngRawImage(
     val iso: Int?,
     val mosaic: U16Plane,
     /** Human-readable notes on anything assumed or ignored while reading. */
-    val notes: List<String>
+    val notes: List<String>,
+    /** DNG ColorMatrix1 (XYZ to camera, row-major) and ForwardMatrix1 (white-balanced camera to XYZ D50), if present. */
+    val colorMatrix1: DoubleArray? = null,
+    val forwardMatrix1: DoubleArray? = null
 ) {
+    fun toColorTransform() = com.neuralcamera.isp.color.ColorTransform.from(asShotNeutral, forwardMatrix1, colorMatrix1)
+
     fun toBayerFrame(gain: Double = 1.0) = BayerFrame(mosaic, BayerRadiometry(blackLevels, whiteLevel, gain))
 }
 
@@ -55,6 +60,8 @@ object DngReader {
     private const val TAG_WHITE_LEVEL = 50717
     private const val TAG_AS_SHOT_NEUTRAL = 50728
     private const val TAG_ACTIVE_AREA = 50829
+    private const val TAG_COLOR_MATRIX_1 = 50721
+    private const val TAG_FORWARD_MATRIX_1 = 50964
     private const val TAG_NOISE_PROFILE = 51041
     private const val TAG_EXPOSURE_TIME = 33434
     private const val TAG_ISO = 34855
@@ -116,7 +123,10 @@ object DngReader {
 
         val exposure = lookup(TAG_EXPOSURE_TIME)?.doubles()?.firstOrNull()?.takeIf { it.isFinite() && it > 0 }
         val iso = lookup(TAG_ISO)?.longs()?.firstOrNull()?.toInt()?.takeIf { it > 0 }
-        DngRawImage(mosaic.width, mosaic.height, cfa, blacks, white, noise, neutral, exposure, iso, mosaic, notes)
+        val colorMatrix = lookup(TAG_COLOR_MATRIX_1)?.doubles()?.takeIf { it.size == 9 }
+        val forwardMatrix = lookup(TAG_FORWARD_MATRIX_1)?.doubles()?.takeIf { it.size == 9 }
+        if (colorMatrix == null && forwardMatrix == null) notes.add("no ColorMatrix1/ForwardMatrix1 in the DNG; colour is white-balance only")
+        DngRawImage(mosaic.width, mosaic.height, cfa, blacks, white, noise, neutral, exposure, iso, mosaic, notes, colorMatrix, forwardMatrix)
     }
 
     private fun expandBlackLevels(repeat: LongArray?, values: DoubleArray?, notes: MutableList<String>): DoubleArray {

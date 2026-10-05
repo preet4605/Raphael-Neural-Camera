@@ -1,4 +1,5 @@
 import com.neuralcamera.benchmarks.Json
+import com.neuralcamera.isp.color.ColorPipeline
 import com.neuralcamera.isp.dng.DngPreview
 import com.neuralcamera.isp.dng.DngRawImage
 import com.neuralcamera.isp.dng.DngReader
@@ -83,7 +84,7 @@ object BurstMergeTool {
             images = images.map { img ->
                 val data = ShortArray(w * h)
                 for (row in 0 until h) System.arraycopy(img.mosaic.data, (y + row) * img.width + x, data, row * w, w)
-                DngRawImage(w, h, img.cfa, img.blackLevels, img.whiteLevel, img.noise, img.asShotNeutral, img.exposureTimeSeconds, img.iso, U16Plane(w, h, data), img.notes)
+                DngRawImage(w, h, img.cfa, img.blackLevels, img.whiteLevel, img.noise, img.asShotNeutral, img.exposureTimeSeconds, img.iso, U16Plane(w, h, data), img.notes, img.colorMatrix1, img.forwardMatrix1)
             }
         }
         val width = images[0].width
@@ -129,6 +130,12 @@ object BurstMergeTool {
         writePng(File(o.output, "reference_preview.png"), DngPreview.render(refNorm, ref.cfa, ref.asShotNeutral), width, height)
         writePng(File(o.output, "merged_preview.png"), DngPreview.render(result.mosaic, ref.cfa, ref.asShotNeutral), width, height)
 
+        val transform = ref.toColorTransform()
+        val refColor = ColorPipeline.render(refNorm, ref.cfa, transform)
+        val mergedColor = ColorPipeline.render(result.mosaic, ref.cfa, transform)
+        writePng8(File(o.output, "reference_color.png"), refColor.srgb8, width, height)
+        writePng8(File(o.output, "merged_color.png"), mergedColor.srgb8, width, height)
+
         fun greenSigma(norm: FloatPlane): Double {
             val pw = width / 2
             val ph = height / 2
@@ -149,6 +156,7 @@ object BurstMergeTool {
             },
             "size" to mapOf("width" to width, "height" to height, "crop" to o.crop?.toList()),
             "cfa" to first.cfa.name,
+            "colorTransform" to transform.source.name,
             "whiteLevel" to first.whiteLevel,
             "blackLevels" to ref.blackLevels.toList(),
             "noise" to mapOf("source" to noiseSource, "perCfaPosition" to noise.map { mapOf("shot" to it.shot, "read" to it.read) }),
@@ -160,7 +168,7 @@ object BurstMergeTool {
             "notes" to notes
         )
         File(o.output, "merge_report.json").writeText(Json.stringify(report))
-        out.println("wrote ${o.output}: merged.pgm, reference_preview.png, merged_preview.png, merge_report.json")
+        out.println("wrote ${o.output}: merged.pgm, reference_preview.png, merged_preview.png, reference_color.png, merged_color.png (colour: ${transform.source}), merge_report.json")
         out.println("green-plane noise sigma: reference %.5f -> merged %.5f (ratio %.2f); merge took %.1f s".format(sigmaRef, sigmaMerged, if (sigmaRef > 0) sigmaMerged / sigmaRef else Double.NaN, mergeSeconds))
         result.frameStats.forEach { out.println("  alt ${it.altIndex}: meanWeight %.2f, tiles rejected %d/%d".format(it.meanWeight, it.tilesRejected, it.tilesTotal)) }
         return 0
@@ -196,6 +204,19 @@ object BurstMergeTool {
                 os.write(row)
             }
         }
+    }
+
+    /** Writes an 8-bit sRGB PNG (interleaved RGB bytes), subsampled so the longest side is at most 2048 px. */
+    private fun writePng8(file: File, rgb: ByteArray, width: Int, height: Int) {
+        val step = maxOf(1, Math.ceil(maxOf(width, height) / 2048.0).toInt())
+        val w = width / step
+        val h = height / step
+        val image = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+        for (y in 0 until h) for (x in 0 until w) {
+            val i = ((y * step) * width + x * step) * 3
+            image.setRGB(x, y, ((rgb[i].toInt() and 255) shl 16) or ((rgb[i + 1].toInt() and 255) shl 8) or (rgb[i + 2].toInt() and 255))
+        }
+        ImageIO.write(image, "png", file)
     }
 
     /** Writes an sRGB PNG, subsampled so the longest side is at most 2048 px. */

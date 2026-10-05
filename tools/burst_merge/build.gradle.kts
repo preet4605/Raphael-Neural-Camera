@@ -17,6 +17,7 @@ sourceSets {
                 "BurstMergeTool.kt",
                 "com/neuralcamera/isp/temporal/**",
                 "com/neuralcamera/isp/dng/**",
+                "com/neuralcamera/isp/color/**",
                 "com/neuralcamera/benchmarks/Json.kt"
             )
         }
