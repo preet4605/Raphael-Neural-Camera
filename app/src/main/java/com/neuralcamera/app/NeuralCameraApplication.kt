@@ -1,8 +1,15 @@
 package com.neuralcamera.app
 
 import android.app.Application
+import android.content.Context
+import android.hardware.SensorManager
+import android.hardware.camera2.CameraManager
 import com.neuralcamera.benchmarks.InMemoryTelemetryLogger
 import com.neuralcamera.benchmarks.StandardBenchmarkRunner
+import com.neuralcamera.cameracore.DeviceCapabilityResolver
+import com.neuralcamera.cameracore.LogicalToPhysicalCameraMap
+import com.neuralcamera.cameracore.RealCamera2Controller
+import com.neuralcamera.cameracore.SensorTimelineSynchronizer
 import com.neuralcamera.capture.UniversalCapturePlanner
 import com.neuralcamera.deviceprofiles.InMemoryDeviceProfileRepository
 import com.neuralcamera.deviceprofiles.PredefinedDeviceProfiles
@@ -31,6 +38,12 @@ class NeuralCameraApplication : Application() {
     lateinit var mediaRepository: OriginalMasterMediaRepository
     lateinit var telemetryLogger: InMemoryTelemetryLogger
     lateinit var benchmarkRunner: StandardBenchmarkRunner
+
+    // Phase 1 Real Hardware Acquisition Layer Components
+    lateinit var cameraController: RealCamera2Controller
+    lateinit var sensorSynchronizer: SensorTimelineSynchronizer
+    lateinit var capabilityResolver: DeviceCapabilityResolver
+    lateinit var logicalToPhysicalMap: LogicalToPhysicalCameraMap
 
     override fun onCreate() {
         super.onCreate()
@@ -75,6 +88,15 @@ class NeuralCameraApplication : Application() {
         // 7. Gallery / Storage
         val mediaDir = File(filesDir, "captures")
         mediaRepository = OriginalMasterMediaRepository(mediaDir)
+
+        // 8. Phase 1 Real Camera2 & Sensor Layer
+        val cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        val sensorManager = getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+
+        cameraController = RealCamera2Controller(this, cameraManager)
+        sensorSynchronizer = SensorTimelineSynchronizer(sensorManager)
+        capabilityResolver = DeviceCapabilityResolver(this, cameraManager)
+        logicalToPhysicalMap = LogicalToPhysicalCameraMap(cameraManager)
 
         telemetryLogger.logEvent("APP_INITIALIZED", mapOf(
             "device" to activeProfile.deviceModel,

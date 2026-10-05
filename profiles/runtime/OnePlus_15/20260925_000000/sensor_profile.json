@@ -1,0 +1,75 @@
+{
+  "appVersion": "1.0.0",
+  "buildIdentifier": "com.neuralcamera.app.debug-v1",
+  "timestamp": 1727222400000,
+  "device": "OnePlus CPH2745 (OnePlus 15)",
+  "soc": "SM8850 (Snapdragon 8 Elite Gen 5)",
+  "sensors": [
+    {
+      "cameraId": "0",
+      "description": "Logical Multi-Camera Master",
+      "activeArray": [8192, 6144],
+      "pixelArray": [8192, 6144],
+      "physicalSizeMm": [9.8, 7.3],
+      "blackLevelPattern": [64, 64, 64, 64],
+      "whiteLevel": 1023,
+      "colorFilter": "RGGB",
+      "clockDomain": "CLOCK_BOOTTIME"
+    },
+    {
+      "cameraId": "1",
+      "description": "Front Camera",
+      "activeArray": [3280, 2464],
+      "pixelArray": [3280, 2464],
+      "physicalSizeMm": [4.6, 3.5],
+      "blackLevelPattern": [64, 64, 64, 64],
+      "whiteLevel": 1023,
+      "colorFilter": "RGGB",
+      "clockDomain": "CLOCK_BOOTTIME"
+    },
+    {
+      "cameraId": "2",
+      "description": "Main Wide Physical",
+      "activeArray": [8192, 6144],
+      "pixelArray": [8192, 6144],
+      "physicalSizeMm": [9.8, 7.3],
+      "blackLevelPattern": [64, 64, 64, 64],
+      "whiteLevel": 1023,
+      "colorFilter": "RGGB",
+      "clockDomain": "CLOCK_BOOTTIME"
+    },
+    {
+      "cameraId": "3",
+      "description": "Ultra-Wide Physical",
+      "activeArray": [4096, 3072],
+      "pixelArray": [4096, 3072],
+      "physicalSizeMm": [6.4, 4.8],
+      "blackLevelPattern": [64, 64, 64, 64],
+      "whiteLevel": 1023,
+      "colorFilter": "RGGB",
+      "clockDomain": "CLOCK_BOOTTIME"
+    },
+    {
+      "cameraId": "4",
+      "description": "Telephoto Physical",
+      "activeArray": [4096, 3072],
+      "pixelArray": [4096, 3072],
+      "physicalSizeMm": [6.4, 4.8],
+      "blackLevelPattern": [64, 64, 64, 64],
+      "whiteLevel": 1023,
+      "colorFilter": "RGGB",
+      "clockDomain": "CLOCK_BOOTTIME"
+    }
+  ],
+  "imuSync": {
+    "sensorModel": "STMicroelectronics lsm6dsv",
+    "gyroscopeAvailable": true,
+    "accelerometerAvailable": true,
+    "nominalSamplingRateHz": 480.0,
+    "measuredSamplingRateHz": 479.85,
+    "averageOffsetMs": 1.2,
+    "maxJitterMs": 0.4,
+    "clockDomain": "CLOCK_BOOTTIME",
+    "clockDomainVerified": true
+  }
+}

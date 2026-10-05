@@ -1,0 +1,33 @@
+{
+  "appVersion": "1.0.0",
+  "buildIdentifier": "com.neuralcamera.app.debug-v1",
+  "timestamp": 1727222400000,
+  "device": "OnePlus CPH2745 (OnePlus 15)",
+  "soc": "SM8850 (Snapdragon 8 Elite Gen 5)",
+  "hardwareEncoders": {
+    "heic": "c2.qti.heic.encoder",
+    "directHalHeicUltraHdr": false,
+    "roCameraDisableHeicUltraHDR": true
+  },
+  "cameraDynamicRange": {
+    "0": {
+      "supportedProfiles": ["SDR", "HLG10", "HDR10", "HDR10_PLUS"],
+      "constraints": {
+        "HLG10": ["SDR", "HLG10"],
+        "HDR10": ["SDR", "HDR10"],
+        "HDR10_PLUS": ["SDR", "HDR10_PLUS"]
+      },
+      "directHalUltraHdr": "DISABLED",
+      "softwarePipelineUltraHdr": "SUPPORTED",
+      "notes": "Direct HAL Ultra HDR output disabled by ro.camera.disableHeicUltraHDR=true; tone-mapped gainmap is composited in software pipeline"
+    },
+    "1": {
+      "supportedProfiles": ["SDR"],
+      "constraints": {
+        "SDR": ["SDR"]
+      },
+      "directHalUltraHdr": "DISABLED",
+      "softwarePipelineUltraHdr": "UNSUPPORTED"
+    }
+  }
+}

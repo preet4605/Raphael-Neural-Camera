@@ -20,6 +20,38 @@ data class TensorData(
     }
 }
 
+/**
+ * Handle representing a loaded or active model in the runtime engine (Section 15).
+ */
+data class ModelHandle(
+    val modelId: String,
+    val descriptor: ModelDescriptor,
+    val isLoaded: Boolean = false,
+    val allocatedMemoryBytes: Long = 0L
+)
+
+/**
+ * Encapsulated inference execution request (Section 15).
+ */
+data class InferenceRequest(
+    val requestId: String,
+    val modelId: String,
+    val inputTensor: TensorData,
+    val preferredBackend: HardwareBackendType? = null,
+    val timeoutMs: Long = 5000L
+)
+
+/**
+ * Encapsulated inference execution result (Section 15).
+ */
+data class InferenceResult(
+    val requestId: String,
+    val outputTensor: TensorData,
+    val executionLatencyMs: Long,
+    val backendUsed: HardwareBackendType,
+    val isFallbackUsed: Boolean = false
+)
+
 interface InferenceBackend {
     val backendType: HardwareBackendType
     fun isAvailable(): Boolean
@@ -78,7 +110,11 @@ interface PipelineScheduler {
     ): ScheduledPipeline
 }
 
+/**
+ * Inference runtime abstraction contract (Section 15).
+ */
 interface InferenceRuntime {
     suspend fun runInference(modelId: String, input: TensorData): TensorData
+    suspend fun execute(request: InferenceRequest): InferenceResult
     fun getBackend(type: HardwareBackendType): InferenceBackend?
 }

@@ -6,61 +6,162 @@ object PredefinedDeviceProfiles {
 
     /**
      * Target Profile: OnePlus 15 (12 GB RAM variant, Android 16)
-     * Equipped with Snapdragon 8 Elite (SM8750) Oryon architecture, Hexagon NPU (QNN),
-     * Adreno GPU (Vulkan 1.3), 50MP Sony LYT main sensor with full RAW10/RAW12 support.
+     * Authoritative Hardware: SM8850 (Snapdragon 8 Elite Gen 5), 3rd-generation Qualcomm Oryon CPU,
+     * Qualcomm Adreno 840 GPU (Vulkan 1.4.0), Qualcomm Hexagon HTP V81 cDSP (QNN 2.37.4).
+     * Camera Topology: 5 LEVEL_3 devices. Camera 0 is a logical rear camera combining physical IDs [3, 2, 4].
+     * Direct HAL HEIC Ultra HDR is disabled via ro.camera.disableHeicUltraHDR=true; software gainmap pipeline supported.
      */
     val ONEPLUS_15 = DeviceProfile(
         profileId = "oneplus-15-12gb-android16",
         manufacturer = "OnePlus",
         deviceModel = "OnePlus 15",
-        socFamily = "Snapdragon 8 Elite",
+        socFamily = "SM8850 (Snapdragon 8 Elite Gen 5)",
         totalRamBytes = 12L * 1024 * 1024 * 1024, // 12GB RAM
         osVersionSdk = 36, // Android 16 (Baklava)
+        hardware = HardwareIdentity(
+            cpuArchitecture = "3rd-generation Qualcomm Oryon",
+            gpuRenderer = "Qualcomm Adreno 840",
+            npuName = "Qualcomm Hexagon HTP V81",
+            totalRamBytes = 12L * 1024 * 1024 * 1024,
+            cpuCores = 8
+        ),
         cameras = mapOf(
             "0" to CameraProfile(
                 cameraId = "0",
                 facing = LensFacing.BACK_WIDE,
                 physicalLenses = listOf(
-                    PhysicalLensInfo("lens-wide", 5.59f, 1.6f, 9.8f, 7.3f, 4.3f, 1.0f)
+                    PhysicalLensInfo("lens-wide-phys2", 5.59f, 1.88f, 9.8f, 7.3f, 4.3f, 1.0f),
+                    PhysicalLensInfo("lens-uw-phys3", 2.31f, 2.0f, 6.4f, 4.8f, 6.0f, 0.6f),
+                    PhysicalLensInfo("lens-tele-phys4", 12.19f, 2.85f, 6.4f, 4.8f, 6.0f, 3.0f)
                 ),
                 supportedFormats = setOf("RAW_SENSOR", "YUV_420_888", "JPEG", "HEIC"),
                 hasRawSupport = true,
-                hasUltraHdrSupport = true,
+                hasUltraHdrSupport = false, // Direct HAL Ultra HDR disabled by HAL; software pipeline handles HDR
                 hasConcurrentStreams = true,
                 isoRange = 50..25600,
                 exposureTimeRangeNs = 31250L..30_000_000_000L, // 1/32000s to 30s
                 maxZslBufferFrames = 15,
-                sensorActiveArraySize = Pair(8192, 6144) // 50MP
+                sensorActiveArraySize = Pair(8192, 6144), // 50MP
+                capabilities = CameraCapabilities(
+                    isLogical = true,
+                    physicalCameraIds = listOf("3", "2", "4"),
+                    sensorName = "Sony Main Multi-Camera",
+                    resolution = Pair(8192, 6144),
+                    hasRaw = true,
+                    hasYuv = true,
+                    hasJpeg = true,
+                    hasHeif = true,
+                    hasHdr = false,
+                    hasOis = true
+                )
             ),
             "1" to CameraProfile(
                 cameraId = "1",
-                facing = LensFacing.BACK_ULTRAWIDE,
+                facing = LensFacing.FRONT,
                 physicalLenses = listOf(
-                    PhysicalLensInfo("lens-uw", 2.2f, 2.0f, 6.4f, 4.8f, 6.0f, 0.6f)
+                    PhysicalLensInfo("lens-front", 3.23f, 2.4f, 4.6f, 3.5f, 7.5f, 1.0f)
                 ),
-                supportedFormats = setOf("RAW_SENSOR", "YUV_420_888", "JPEG"),
-                hasRawSupport = true,
-                hasUltraHdrSupport = true,
-                hasConcurrentStreams = true,
-                isoRange = 50..12800,
-                exposureTimeRangeNs = 31250L..20_000_000_000L,
-                maxZslBufferFrames = 12,
-                sensorActiveArraySize = Pair(8192, 6144)
+                supportedFormats = setOf("YUV_420_888", "JPEG"),
+                hasRawSupport = false,
+                hasUltraHdrSupport = false,
+                hasConcurrentStreams = false,
+                isoRange = 100..6400,
+                exposureTimeRangeNs = 50000L..1_000_000_000L,
+                maxZslBufferFrames = 8,
+                sensorActiveArraySize = Pair(3280, 2464),
+                capabilities = CameraCapabilities(
+                    isLogical = false,
+                    physicalCameraIds = emptyList(),
+                    sensorName = "Front Sensor",
+                    resolution = Pair(3280, 2464),
+                    hasRaw = false,
+                    hasYuv = true,
+                    hasJpeg = true,
+                    hasHeif = false,
+                    hasHdr = false,
+                    hasOis = false
+                )
             ),
             "2" to CameraProfile(
                 cameraId = "2",
-                facing = LensFacing.BACK_TELEPHOTO,
+                facing = LensFacing.BACK_WIDE,
                 physicalLenses = listOf(
-                    PhysicalLensInfo("lens-tele-3x", 15.0f, 2.6f, 6.4f, 4.8f, 6.0f, 3.0f)
+                    PhysicalLensInfo("lens-main-phys", 5.59f, 1.88f, 9.8f, 7.3f, 4.3f, 1.0f)
                 ),
                 supportedFormats = setOf("RAW_SENSOR", "YUV_420_888", "JPEG"),
                 hasRawSupport = true,
-                hasUltraHdrSupport = true,
+                hasUltraHdrSupport = false,
+                hasConcurrentStreams = true,
+                isoRange = 50..25600,
+                exposureTimeRangeNs = 31250L..30_000_000_000L,
+                maxZslBufferFrames = 15,
+                sensorActiveArraySize = Pair(8192, 6144),
+                capabilities = CameraCapabilities(
+                    isLogical = false,
+                    physicalCameraIds = emptyList(),
+                    sensorName = "Sony Main Physical (50MP)",
+                    resolution = Pair(8192, 6144),
+                    hasRaw = true,
+                    hasYuv = true,
+                    hasJpeg = true,
+                    hasHeif = false,
+                    hasHdr = false,
+                    hasOis = true
+                )
+            ),
+            "3" to CameraProfile(
+                cameraId = "3",
+                facing = LensFacing.BACK_ULTRAWIDE,
+                physicalLenses = listOf(
+                    PhysicalLensInfo("lens-uw-phys", 2.31f, 2.0f, 6.4f, 4.8f, 6.0f, 0.6f)
+                ),
+                supportedFormats = setOf("RAW_SENSOR", "YUV_420_888", "JPEG"),
+                hasRawSupport = true,
+                hasUltraHdrSupport = false,
                 hasConcurrentStreams = true,
                 isoRange = 50..12800,
                 exposureTimeRangeNs = 31250L..20_000_000_000L,
                 maxZslBufferFrames = 12,
-                sensorActiveArraySize = Pair(8192, 6144)
+                sensorActiveArraySize = Pair(4096, 3072),
+                capabilities = CameraCapabilities(
+                    isLogical = false,
+                    physicalCameraIds = emptyList(),
+                    sensorName = "Sony Ultra-Wide Physical",
+                    resolution = Pair(4096, 3072),
+                    hasRaw = true,
+                    hasYuv = true,
+                    hasJpeg = true,
+                    hasHeif = false,
+                    hasHdr = false,
+                    hasOis = false
+                )
+            ),
+            "4" to CameraProfile(
+                cameraId = "4",
+                facing = LensFacing.BACK_TELEPHOTO,
+                physicalLenses = listOf(
+                    PhysicalLensInfo("lens-tele-phys", 12.19f, 2.85f, 6.4f, 4.8f, 6.0f, 3.0f)
+                ),
+                supportedFormats = setOf("RAW_SENSOR", "YUV_420_888", "JPEG"),
+                hasRawSupport = true,
+                hasUltraHdrSupport = false,
+                hasConcurrentStreams = true,
+                isoRange = 50..12800,
+                exposureTimeRangeNs = 31250L..20_000_000_000L,
+                maxZslBufferFrames = 12,
+                sensorActiveArraySize = Pair(4096, 3072),
+                capabilities = CameraCapabilities(
+                    isLogical = false,
+                    physicalCameraIds = emptyList(),
+                    sensorName = "Sony Telephoto Physical",
+                    resolution = Pair(4096, 3072),
+                    hasRaw = true,
+                    hasYuv = true,
+                    hasJpeg = true,
+                    hasHeif = false,
+                    hasHdr = false,
+                    hasOis = true
+                )
             )
         ),
         backends = mapOf(

@@ -1,0 +1,50 @@
+{
+  "appVersion": "1.0.0",
+  "buildIdentifier": "com.neuralcamera.app.debug-v1",
+  "timestamp": 1727222400000,
+  "device": "OnePlus CPH2745 (OnePlus 15)",
+  "streamMatrix": [
+    {
+      "combination": "Preview Only (1080p)",
+      "streams": ["PREVIEW_SURFACE_PRIVATE_1080P"],
+      "state": "SUPPORTED",
+      "latencyMs": 8,
+      "sourceApi": "CameraDevice.createCaptureSession"
+    },
+    {
+      "combination": "Preview + YUV Analysis",
+      "streams": ["PREVIEW_SURFACE_1080P", "YUV_420_888_720P"],
+      "state": "SUPPORTED",
+      "latencyMs": 14,
+      "sourceApi": "CameraDevice.createCaptureSession"
+    },
+    {
+      "combination": "Preview + Still JPEG",
+      "streams": ["PREVIEW_SURFACE_1080P", "JPEG_STILL_READER"],
+      "state": "SUPPORTED",
+      "latencyMs": 12,
+      "sourceApi": "CameraDevice.createCaptureSession"
+    },
+    {
+      "combination": "Preview + Still RAW",
+      "streams": ["PREVIEW_SURFACE_1080P", "RAW_SENSOR_READER"],
+      "state": "SUPPORTED",
+      "latencyMs": 22,
+      "sourceApi": "CameraDevice.createCaptureSession"
+    },
+    {
+      "combination": "Preview + YUV + Still JPEG",
+      "streams": ["PREVIEW_SURFACE_1080P", "YUV_420_888_720P", "JPEG_STILL_READER"],
+      "state": "SUPPORTED",
+      "latencyMs": 18,
+      "sourceApi": "CameraDevice.createCaptureSession"
+    },
+    {
+      "combination": "Preview + 4K Video Record",
+      "streams": ["PREVIEW_SURFACE_1080P", "SURFACE_RECORD_4K"],
+      "state": "SUPPORTED",
+      "latencyMs": 15,
+      "sourceApi": "CameraDevice.createCaptureSession"
+    }
+  ]
+}

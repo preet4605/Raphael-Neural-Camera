@@ -1,5 +1,6 @@
 package com.neuralcamera.ui
 
+import android.view.Surface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,6 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.neuralcamera.capture.CameraShootingMode
+import com.neuralcamera.ui.components.CameraDiagnosticsData
+import com.neuralcamera.ui.components.CameraDiagnosticsSheet
+import com.neuralcamera.ui.components.CameraViewport
 import com.neuralcamera.ui.theme.DarkGunmetal
 import com.neuralcamera.ui.theme.LeicaRed
 import com.neuralcamera.ui.theme.MatteBlack
@@ -51,7 +55,8 @@ data class CameraUIState(
     val thermalStatus: String = "NORMAL",
     val realityGuardState: String = "PROTECTING (1.00)",
     val showDiagnostics: Boolean = false,
-    val isCapturing: Boolean = false
+    val isCapturing: Boolean = false,
+    val diagnosticsData: CameraDiagnosticsData = CameraDiagnosticsData()
 )
 
 @Composable
@@ -60,7 +65,9 @@ fun NeuralCameraScreen(
     onModeSelected: (CameraShootingMode) -> Unit = {},
     onZoomSelected: (Float) -> Unit = {},
     onShutterPressed: () -> Unit = {},
-    onToggleDiagnostics: () -> Unit = {}
+    onToggleDiagnostics: () -> Unit = {},
+    onSurfaceAvailable: (Surface) -> Unit = {},
+    onSurfaceDestroyed: () -> Unit = {}
 ) {
     NeuralCameraTheme {
         Box(
@@ -68,14 +75,15 @@ fun NeuralCameraScreen(
                 .fillMaxSize()
                 .background(ViewfinderBlack)
         ) {
-            // Viewfinder Grid / Canvas
-            Box(
+            // Live Hardware Camera2 Viewport (Section 10 & 11)
+            CameraViewport(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 64.dp, bottom = 140.dp)
-                    .background(MatteBlack)
+                    .padding(top = 64.dp, bottom = 140.dp),
+                onSurfaceAvailable = onSurfaceAvailable,
+                onSurfaceDestroyed = onSurfaceDestroyed
             ) {
-                // Rule of thirds subtle grid lines
+                // Rule of thirds subtle grid lines overlay
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -252,26 +260,14 @@ fun NeuralCameraScreen(
                 }
             }
 
-            // Diagnostics Overlay Sheet
+            // Diagnostics Overlay Sheet adhering to Section 34
             if (state.showDiagnostics) {
-                Box(
+                CameraDiagnosticsSheet(
+                    data = state.diagnosticsData,
                     modifier = Modifier
-                        .align(Alignment.TopStart)
+                        .align(Alignment.TopCenter)
                         .padding(top = 70.dp, start = 16.dp, end = 16.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MatteBlack.copy(alpha = 0.90f))
-                        .border(1.dp, PrecisionAmber.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                        .padding(14.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("DIAGNOSTICS INSTRUMENTATION", color = PrecisionAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                        Text("BACKEND: ${state.neuralBackendName}", color = StudioWhite, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                        Text("LATENCY: ${state.latencyMs} ms", color = StudioWhite, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                        Text("MEMORY: ${state.memoryUsageMb} MB / 512 MB", color = StudioWhite, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                        Text("THERMAL: ${state.thermalStatus}", color = StudioWhite, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                        Text("REALITY GUARD: ${state.realityGuardState}", color = NeuralActiveGreen, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                    }
-                }
+                )
             }
         }
     }

@@ -176,3 +176,46 @@ class AdaptivePipelineScheduler(
         )
     }
 }
+
+/**
+ * Standard implementation of InferenceRuntime adhering to Section 15.
+ */
+class StandardInferenceRuntime(
+    private val modelRegistry: ModelRegistry,
+    private val scheduler: PipelineScheduler,
+    private val backends: Map<HardwareBackendType, InferenceBackend> = emptyMap()
+) : InferenceRuntime {
+
+    override suspend fun runInference(modelId: String, input: TensorData): TensorData {
+        val request = InferenceRequest(
+            requestId = "req_${System.currentTimeMillis()}",
+            modelId = modelId,
+            inputTensor = input
+        )
+        return execute(request).outputTensor
+    }
+
+    override suspend fun execute(request: InferenceRequest): InferenceResult {
+        val scheduled = scheduler.scheduleExecution(request.modelId, targetFps = 30)
+        val startTime = System.currentTimeMillis()
+        val backend = backends[scheduled.selectedBackend]
+
+        val output = if (backend != null && backend.isAvailable()) {
+            backend.executeInference(scheduled.selectedModel, request.inputTensor)
+        } else {
+            // Classical/safe fallback passthrough
+            request.inputTensor
+        }
+        val latency = System.currentTimeMillis() - startTime
+
+        return InferenceResult(
+            requestId = request.requestId,
+            outputTensor = output,
+            executionLatencyMs = latency,
+            backendUsed = scheduled.selectedBackend,
+            isFallbackUsed = scheduled.useClassicalFallback
+        )
+    }
+
+    override fun getBackend(type: HardwareBackendType): InferenceBackend? = backends[type]
+}

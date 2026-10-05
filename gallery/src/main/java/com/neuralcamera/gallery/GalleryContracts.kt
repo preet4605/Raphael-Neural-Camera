@@ -21,6 +21,103 @@ data class EncodedOutput(
     }
 }
 
+/**
+ * Original sensor capture preserving untampered raw bytes (Section 18).
+ */
+data class OriginalCapture(
+    val captureId: String,
+    val format: String, // "DNG", "RAW_SENSOR", "UNPROCESSED_JPEG"
+    val rawBytes: ByteArray,
+    val width: Int,
+    val height: Int,
+    val timestampNs: Long
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is OriginalCapture) return false
+        return captureId == other.captureId && format == other.format && rawBytes.contentEquals(other.rawBytes)
+    }
+
+    override fun hashCode(): Int {
+        var result = captureId.hashCode()
+        result = 31 * result + format.hashCode()
+        result = 31 * result + rawBytes.contentHashCode()
+        return result
+    }
+}
+
+/**
+ * Standard processed image output prior to neural master post-grading (Section 18).
+ */
+data class ProcessedImage(
+    val imageId: String,
+    val rgbBytes: ByteArray,
+    val width: Int,
+    val height: Int,
+    val appliedPipeline: String
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is ProcessedImage) return false
+        return imageId == other.imageId && rgbBytes.contentEquals(other.rgbBytes)
+    }
+
+    override fun hashCode(): Int {
+        var result = imageId.hashCode()
+        result = 31 * result + rgbBytes.contentHashCode()
+        return result
+    }
+}
+
+/**
+ * High-fidelity neural master image output (Section 18).
+ */
+data class NeuralMaster(
+    val masterId: String,
+    val format: String, // "JPEG", "HEIF", "ULTRA_HDR"
+    val encodedBytes: ByteArray,
+    val width: Int,
+    val height: Int,
+    val confidenceScore: Float
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is NeuralMaster) return false
+        return masterId == other.masterId && format == other.format && encodedBytes.contentEquals(other.encodedBytes)
+    }
+
+    override fun hashCode(): Int {
+        var result = masterId.hashCode()
+        result = 31 * result + format.hashCode()
+        result = 31 * result + encodedBytes.contentHashCode()
+        return result
+    }
+}
+
+/**
+ * Rich capture and processing metadata (Section 18).
+ */
+data class CaptureStorageMetadata(
+    val mediaId: String,
+    val iso: Int,
+    val exposureTimeNs: Long,
+    val focalLengthMm: Float,
+    val lensFacing: String,
+    val neuralAccelerationUsed: Boolean,
+    val appliedModelId: String?,
+    val realityGuardPassed: Boolean
+)
+
+/**
+ * Temporary scratch data allocated during multi-frame pipeline fusion (Section 18).
+ */
+data class TemporaryProcessingData(
+    val sessionId: String,
+    val intermediateTensorBytes: Long,
+    val tempFilePaths: List<String> = emptyList(),
+    val isCleanedUp: Boolean = false
+)
+
 data class SavedMediaItem(
     val mediaId: String,
     val originalFilePath: String,

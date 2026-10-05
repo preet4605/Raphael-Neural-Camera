@@ -1,0 +1,218 @@
+{
+  "appVersion": "1.0.0",
+  "buildIdentifier": "com.neuralcamera.app.debug-v1",
+  "timestamp": 1727222400000,
+  "device": "OnePlus CPH2745 (OnePlus 15)",
+  "soc": "SM8850 (Snapdragon 8 Elite Gen 5)",
+  "allDevicesHardwareLevel": "LEVEL_3",
+  "cameras": [
+    {
+      "cameraId": "0",
+      "hardwareLevel": "LEVEL_3",
+      "lensFacing": "BACK_WIDE",
+      "sensorOrientation": 90,
+      "isLogical": true,
+      "physicalCameraIds": ["3", "2", "4"],
+      "sensor": {
+        "activeArray": [8192, 6144],
+        "pixelArray": [8192, 6144],
+        "physicalSizeMm": [9.8, 7.3],
+        "isoRange": [50, 25600],
+        "exposureTimeRangeNs": [31250, 30000000000],
+        "maxFrameDurationNs": 33333333,
+        "colorFilterArrangement": "RGGB",
+        "blackLevelPattern": [64, 64, 64, 64],
+        "whiteLevel": 1023
+      },
+      "lens": {
+        "focalLengthsMm": [5.59, 2.31, 12.19],
+        "apertures": [1.88, 2.0, 2.85],
+        "minimumFocusDistanceMeters": 0.1,
+        "oisModes": ["ON", "OFF"],
+        "focusCalibration": "CALIBRATED"
+      },
+      "threeA": {
+        "aeModes": ["AE_MODE_OFF", "AE_MODE_ON", "AE_MODE_ON_AUTO_FLASH", "AE_MODE_ON_ALWAYS_FLASH"],
+        "afModes": ["AF_MODE_AUTO", "AF_MODE_CONTINUOUS_PICTURE", "AF_MODE_CONTINUOUS_VIDEO", "AF_MODE_MACRO", "AF_MODE_OFF"],
+        "awbModes": ["AWB_MODE_AUTO", "AWB_MODE_INCANDESCENT", "AWB_MODE_FLUORESCENT", "AWB_MODE_DAYLIGHT", "AWB_MODE_CLOUDY_DAYLIGHT"],
+        "exposureCompensationRange": [-6, 6],
+        "exposureCompensationStep": 0.33333334,
+        "aeLockSupported": true,
+        "awbLockSupported": true
+      },
+      "capabilities": {
+        "RAW_SENSOR": {
+          "status": "DISCOVERED",
+          "sourceApi": "CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP",
+          "tested": true,
+          "verified": true,
+          "testResult": "Supported via RAW10 / RAW_SENSOR at 8192x6144 and 4096x3072"
+        },
+        "LOGICAL_MULTI_CAMERA": {
+          "status": "DISCOVERED",
+          "sourceApi": "CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_LOGICAL_MULTI_CAMERA",
+          "tested": true,
+          "verified": true,
+          "testResult": "Logical multi-camera backed by physical constituent cameras [3, 2, 4]"
+        },
+        "HEIC_ULTRA_HDR": {
+          "status": "DISABLED_BY_HAL",
+          "sourceApi": "ro.camera.disableHeicUltraHDR",
+          "tested": true,
+          "verified": true,
+          "testResult": "Direct HAL Ultra HDR disabled via property. Software gainmap generation pipeline supported."
+        }
+      }
+    },
+    {
+      "cameraId": "1",
+      "hardwareLevel": "LEVEL_3",
+      "lensFacing": "FRONT",
+      "sensorOrientation": 270,
+      "isLogical": false,
+      "physicalCameraIds": [],
+      "sensor": {
+        "activeArray": [3280, 2464],
+        "pixelArray": [3280, 2464],
+        "physicalSizeMm": [4.6, 3.5],
+        "isoRange": [100, 6400],
+        "exposureTimeRangeNs": [50000, 1000000000],
+        "maxFrameDurationNs": 33333333,
+        "colorFilterArrangement": "RGGB",
+        "blackLevelPattern": [64, 64, 64, 64],
+        "whiteLevel": 1023
+      },
+      "lens": {
+        "focalLengthsMm": [3.23],
+        "apertures": [2.4],
+        "minimumFocusDistanceMeters": 0.0,
+        "oisModes": ["OFF"]
+      },
+      "threeA": {
+        "aeModes": ["AE_MODE_ON", "AE_MODE_ON_AUTO_FLASH"],
+        "afModes": ["AF_MODE_OFF"],
+        "awbModes": ["AWB_MODE_AUTO"],
+        "exposureCompensationRange": [-4, 4],
+        "exposureCompensationStep": 0.5,
+        "aeLockSupported": true,
+        "awbLockSupported": true
+      },
+      "capabilities": {
+        "YUV_PREVIEW": {
+          "status": "DISCOVERED",
+          "sourceApi": "CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP",
+          "tested": true,
+          "verified": true,
+          "testResult": "Supported up to 3280x2464"
+        }
+      }
+    },
+    {
+      "cameraId": "2",
+      "hardwareLevel": "LEVEL_3",
+      "lensFacing": "BACK_WIDE",
+      "sensorOrientation": 90,
+      "isLogical": false,
+      "physicalCameraIds": [],
+      "sensor": {
+        "activeArray": [8192, 6144],
+        "pixelArray": [8192, 6144],
+        "binnedArray": [4096, 3072],
+        "physicalSizeMm": [9.8, 7.3],
+        "isoRange": [50, 25600],
+        "exposureTimeRangeNs": [31250, 30000000000],
+        "maxFrameDurationNs": 33333333,
+        "colorFilterArrangement": "RGGB",
+        "blackLevelPattern": [64, 64, 64, 64],
+        "whiteLevel": 1023
+      },
+      "lens": {
+        "description": "Main Wide Physical Sensor (50MP)",
+        "focalLengthsMm": [5.59],
+        "apertures": [1.88],
+        "minimumFocusDistanceMeters": 0.1,
+        "oisModes": ["ON", "OFF"],
+        "focusCalibration": "CALIBRATED"
+      },
+      "capabilities": {
+        "RAW_SENSOR": {
+          "status": "DISCOVERED",
+          "sourceApi": "CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP",
+          "tested": true,
+          "verified": true,
+          "testResult": "Direct physical RAW10/RAW_SENSOR supported at 8192x6144 and 4096x3072"
+        }
+      }
+    },
+    {
+      "cameraId": "3",
+      "hardwareLevel": "LEVEL_3",
+      "lensFacing": "BACK_ULTRAWIDE",
+      "sensorOrientation": 90,
+      "isLogical": false,
+      "physicalCameraIds": [],
+      "sensor": {
+        "activeArray": [4096, 3072],
+        "pixelArray": [4096, 3072],
+        "physicalSizeMm": [6.4, 4.8],
+        "isoRange": [50, 12800],
+        "exposureTimeRangeNs": [31250, 20000000000],
+        "maxFrameDurationNs": 33333333,
+        "colorFilterArrangement": "RGGB",
+        "blackLevelPattern": [64, 64, 64, 64],
+        "whiteLevel": 1023
+      },
+      "lens": {
+        "description": "Ultra-Wide Physical Sensor",
+        "focalLengthsMm": [2.31],
+        "apertures": [2.0],
+        "minimumFocusDistanceMeters": 0.05,
+        "oisModes": ["OFF"]
+      },
+      "capabilities": {
+        "RAW_SENSOR": {
+          "status": "DISCOVERED",
+          "sourceApi": "CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP",
+          "tested": true,
+          "verified": true,
+          "testResult": "Direct physical RAW_SENSOR supported at 4096x3072"
+        }
+      }
+    },
+    {
+      "cameraId": "4",
+      "hardwareLevel": "LEVEL_3",
+      "lensFacing": "BACK_TELEPHOTO",
+      "sensorOrientation": 90,
+      "isLogical": false,
+      "physicalCameraIds": [],
+      "sensor": {
+        "activeArray": [4096, 3072],
+        "pixelArray": [4096, 3072],
+        "physicalSizeMm": [6.4, 4.8],
+        "isoRange": [50, 12800],
+        "exposureTimeRangeNs": [31250, 20000000000],
+        "maxFrameDurationNs": 33333333,
+        "colorFilterArrangement": "RGGB",
+        "blackLevelPattern": [64, 64, 64, 64],
+        "whiteLevel": 1023
+      },
+      "lens": {
+        "description": "Telephoto / Periscope Physical Sensor (~70-75mm equivalent)",
+        "focalLengthsMm": [12.19],
+        "apertures": [2.85],
+        "minimumFocusDistanceMeters": 0.3,
+        "oisModes": ["ON", "OFF"]
+      },
+      "capabilities": {
+        "RAW_SENSOR": {
+          "status": "DISCOVERED",
+          "sourceApi": "CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP",
+          "tested": true,
+          "verified": true,
+          "testResult": "Direct physical RAW_SENSOR supported at 4096x3072"
+        }
+      }
+    }
+  ]
+}

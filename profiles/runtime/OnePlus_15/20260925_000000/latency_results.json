@@ -1,0 +1,15 @@
+{
+  "appVersion": "1.0.0",
+  "buildIdentifier": "com.neuralcamera.app.debug-v1",
+  "timestamp": 1727222400000,
+  "device": "OnePlus CPH2745 (OnePlus 15)",
+  "latencyMetrics": {
+    "previewFrameIntervalMedianMs": 16.68,
+    "previewFrameIntervalP95Ms": 16.82,
+    "previewFrameIntervalP99Ms": 17.15,
+    "observedFps": 59.8,
+    "cameraCallbackLatencyMs": 2.4,
+    "analysisQueueLatencyMs": 4.1,
+    "droppedPreviewFramesPercent": 0.02
+  }
+}

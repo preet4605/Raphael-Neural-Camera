@@ -37,7 +37,6 @@ dependencies {
     implementation(project(":device-profiles"))
     implementation(project(":camera-core"))
     implementation(project(":capture-intelligence"))
-    implementation(project(":neural-runtime"))
     implementation(project(":neural-isp"))
     implementation(project(":quality-engine"))
     implementation(project(":gallery"))

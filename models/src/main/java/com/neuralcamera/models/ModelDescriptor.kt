@@ -1,9 +1,19 @@
 package com.neuralcamera.models
 
 /**
+ * Expected quality metric targets for neural model evaluation.
+ */
+data class QualityMetricsExpectation(
+    val minPsnrDb: Float = 32.0f,
+    val minSsim: Float = 0.92f,
+    val maxArtifactScore: Float = 0.08f
+)
+
+/**
  * ModelDescriptor defines the complete operational contract of an on-device neural model.
- * In accordance with Section 18 of the Constitution, every model must have explicit metadata,
- * input/output specifications, hardware backend targets, latency budgets, and fallback routes.
+ * In accordance with Section 14 of the Constitution, every model must declare:
+ * modelId, version, license, size, inputDescription, outputDescription, precision,
+ * supportedBackends, memoryRequirement, latencyExpectation, qualityMetrics, fallback, compatibility.
  */
 data class ModelDescriptor(
     val modelId: String,
@@ -24,5 +34,61 @@ data class ModelDescriptor(
     val compatibilityRequirements: List<String>,
     val fallbackModelId: String? = null,
     val isClassicalFallback: Boolean = false,
-    val compatibilityState: ModelCompatibilityState = ModelCompatibilityState.AVAILABLE
-)
+    val compatibilityState: ModelCompatibilityState = ModelCompatibilityState.AVAILABLE,
+    val inputDescription: String = "$inputFormat at ${inputResolution.first}x${inputResolution.second}",
+    val outputDescription: String = "$outputFormat at ${outputResolution.first}x${outputResolution.second}",
+    val qualityMetrics: QualityMetricsExpectation? = null
+) {
+    // Aliases ensuring 100% adherence to Section 14 naming
+    val size: Long get() = fileSizeBytes
+    val precision: TensorPrecision get() = tensorPrecision
+    val memoryRequirement: Long get() = memoryRequirementBytes
+    val latencyExpectation: Long get() = expectedLatencyMs
+    val fallback: String? get() = fallbackModelId
+    val compatibility: List<String> get() = compatibilityRequirements
+}
+
+/**
+ * Manifest validator ensuring model manifests meet strict operational standards (Section 23).
+ */
+object ModelManifestValidator {
+
+    data class ValidationResult(
+        val isValid: Boolean,
+        val issues: List<String>
+    )
+
+    fun validate(descriptor: ModelDescriptor): ValidationResult {
+        val issues = mutableListOf<String>()
+
+        if (descriptor.modelId.isBlank()) {
+            issues.add("modelId cannot be blank")
+        }
+        if (descriptor.license.isBlank()) {
+            issues.add("license cannot be blank")
+        }
+        if (!descriptor.isClassicalFallback && descriptor.size <= 0) {
+            issues.add("Neural model size must be greater than 0 bytes")
+        }
+        if (descriptor.supportedBackends.isEmpty()) {
+            issues.add("supportedBackends cannot be empty")
+        }
+        if (descriptor.memoryRequirement <= 0) {
+            issues.add("memoryRequirement must be positive")
+        }
+        if (descriptor.latencyExpectation <= 0) {
+            issues.add("latencyExpectation must be positive")
+        }
+        if (descriptor.inputDescription.isBlank()) {
+            issues.add("inputDescription cannot be blank")
+        }
+        if (descriptor.outputDescription.isBlank()) {
+            issues.add("outputDescription cannot be blank")
+        }
+        if (!descriptor.isClassicalFallback && descriptor.fallback == null) {
+            issues.add("Neural models should specify a fallbackModelId for reliability")
+        }
+
+        return ValidationResult(isValid = issues.isEmpty(), issues = issues)
+    }
+}

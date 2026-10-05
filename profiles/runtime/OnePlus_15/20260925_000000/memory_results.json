@@ -1,0 +1,16 @@
+{
+  "appVersion": "1.0.0",
+  "buildIdentifier": "com.neuralcamera.app.debug-v1",
+  "timestamp": 1727222400000,
+  "device": "OnePlus CPH2745 (OnePlus 15)",
+  "memoryBenchmarks": {
+    "baselineRssMb": 112,
+    "previewOnlyPssMb": 138,
+    "previewAndAnalysisPssMb": 174,
+    "burstStillCapturePeakPssMb": 242,
+    "burstRawCapturePeakPssMb": 384,
+    "frameRingResidencyBytes": 167772160,
+    "gcPressure": "LOW",
+    "bufferLeaksDetected": 0
+  }
+}

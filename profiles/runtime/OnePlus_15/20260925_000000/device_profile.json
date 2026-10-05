@@ -1,0 +1,102 @@
+{
+  "appVersion": "1.0.0",
+  "buildIdentifier": "com.neuralcamera.app.debug-v1",
+  "timestamp": 1727222400000,
+  "deviceIdentity": {
+    "manufacturer": "OnePlus",
+    "model": "CPH2745",
+    "commercialName": "OnePlus 15",
+    "brand": "OnePlus",
+    "product": "CPH2745IN",
+    "device": "OP611FL1",
+    "board": "canoe",
+    "codename": "canoe",
+    "hardware": "qcom",
+    "socPlatform": "SM8850",
+    "socId": 660,
+    "socCommercialName": "Snapdragon 8 Elite Gen 5",
+    "socFamily": "SM8850 (Snapdragon 8 Elite Gen 5)"
+  },
+  "os": {
+    "osName": "Android",
+    "release": "16",
+    "apiLevel": 36,
+    "abi": "arm64-v8a",
+    "64BitOnly": true,
+    "kernel": "Linux 6.12.23-android16-5-gb2a876903b49-ab14541642-4k aarch64",
+    "rootAvailable": false,
+    "selinux": "Enforcing",
+    "diagnosticsInterface": "Rish/Shizuku UID 2000 (Development diagnostics only; application is rootless)"
+  },
+  "cpu": {
+    "architecture": "3rd-generation Qualcomm Oryon",
+    "isa": "ARMv9.2-A",
+    "implementer": "0x51",
+    "part": "0x002",
+    "totalCores": 8,
+    "clusters": [
+      {
+        "type": "Performance",
+        "cores": 6,
+        "maxFrequencyGHz": 3.6288
+      },
+      {
+        "type": "Prime",
+        "cores": 2,
+        "maxFrequencyGHz": 4.6080
+      }
+    ],
+    "features": [
+      "NEON",
+      "FP16",
+      "DOTPROD",
+      "I8MM",
+      "BF16",
+      "SVE",
+      "SVE2",
+      "SME"
+    ]
+  },
+  "gpu": {
+    "renderer": "Qualcomm Adreno 840",
+    "openGlEsVersion": "3.2",
+    "vulkanVersion": "1.4.0",
+    "vulkanCompute": "AVAILABLE",
+    "modelExecution": "NOT_TESTED"
+  },
+  "npu": {
+    "name": "Qualcomm Hexagon",
+    "htpGeneration": "V81",
+    "subsystem": "cDSP",
+    "qnnVersion": "2.37.4",
+    "libraries": [
+      "libQnnHtp.so",
+      "libQnnHtpV81Stub.so",
+      "libQnnHtpV81Skel.so",
+      "libQnnGpu.so",
+      "libQnnCpu.so"
+    ],
+    "modelExecution": "NOT_TESTED"
+  },
+  "hardwareMemory": {
+    "totalRamBytes": 12884901888,
+    "androidVisibleRamBytes": 12219760640,
+    "zramBytes": 12884901888,
+    "frameRingCeilingBytes": 536870912,
+    "maxModelResidencyBytes": 2684354560
+  },
+  "mediaEncoders": {
+    "hardwareHeicEncoder": "c2.qti.heic.encoder",
+    "directHalHeicUltraHdr": false,
+    "propertyDisableHeicUltraHDR": true,
+    "notes": "ro.camera.disableHeicUltraHDR=true disables direct HAL HEIF Ultra HDR and direct HAL JPEG_R. Ultra HDR gainmap generation is performed via software/pipeline."
+  },
+  "zeroCopy": {
+    "designStatus": "PASS",
+    "hardwareStatus": "PARTIAL",
+    "surfaceScanout": "0_COPY_VERIFIED",
+    "hardwareBufferNpuGpu": "NOT_TESTED",
+    "jvmArrayAccess": "1_COPY",
+    "notes": "Surface preview scanout is 0-copy via SurfaceFlinger. AHardwareBuffer NPU/GPU zero-copy path is designed and present in HAL contracts but model execution is NOT_TESTED. JNI/JVM plane fallback incurs 1 copy when byte arrays are accessed by CPU."
+  }
+}

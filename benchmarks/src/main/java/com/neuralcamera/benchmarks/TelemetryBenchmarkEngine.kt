@@ -112,3 +112,55 @@ class InMemoryTelemetryLogger : TelemetryLogger {
         return events.takeLast(limit)
     }
 }
+
+/**
+ * Structured logger implementation storing filtered in-memory records (Section 19).
+ */
+class InMemoryStructuredLogger : StructuredLogger {
+    private val logs = CopyOnWriteArrayList<StructuredLogEntry>()
+
+    override fun log(
+        category: LogCategory,
+        level: LogLevel,
+        message: String,
+        attributes: Map<String, String>,
+        throwable: Throwable?
+    ) {
+        // Redact any accidental byte buffer / pixel content
+        val sanitizedMsg = if (message.contains("ByteArray") || message.contains("FramePlane")) {
+            "[PIXEL_DATA_REDACTED]"
+        } else {
+            message
+        }
+
+        val entry = StructuredLogEntry(
+            timestampNs = System.nanoTime(),
+            category = category,
+            level = level,
+            message = sanitizedMsg,
+            attributes = attributes,
+            error = throwable?.message
+        )
+        logs.add(entry)
+        if (logs.size > 1000) {
+            logs.removeAt(0)
+        }
+    }
+
+    override fun getLogs(
+        category: LogCategory?,
+        minLevel: LogLevel,
+        limit: Int
+    ): List<StructuredLogEntry> {
+        return logs
+            .filter { entry ->
+                (category == null || entry.category == category) &&
+                        entry.level.ordinal >= minLevel.ordinal
+            }
+            .takeLast(limit)
+    }
+
+    override fun clear() {
+        logs.clear()
+    }
+}

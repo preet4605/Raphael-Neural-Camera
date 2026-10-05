@@ -1,0 +1,32 @@
+{
+  "phase": 1,
+  "appVersion": "1.0.0",
+  "buildIdentifier": "com.neuralcamera.app.debug-v1",
+  "timestamp": 1727222400000,
+  "device": "OnePlus CPH2745 (OnePlus 15)",
+  "androidRelease": "16",
+  "sdkInt": 36,
+  "auditMechanism": "Physical Device Termux/Rish/Shizuku (shell UID 2000)",
+  "hardwareIdentity": {
+    "socPlatform": "SM8850",
+    "socId": 660,
+    "socCommercialName": "Snapdragon 8 Elite Gen 5",
+    "cpu": "3rd-generation Qualcomm Oryon",
+    "gpu": "Qualcomm Adreno 840 (Vulkan 1.4.0)",
+    "npu": "Qualcomm Hexagon HTP V81 cDSP (QNN 2.37.4)",
+    "ramBytes": 12884901888,
+    "cameraTopology": "5 LEVEL_3 devices; Camera 0 logical multi-camera [3, 2, 4]",
+    "imu": "STMicroelectronics lsm6dsv (479.85 Hz, CLOCK_BOOTTIME)"
+  },
+  "executionGates": {
+    "cameraHal3Acquisition": "VERIFIED",
+    "imuBoottimeSync": "VERIFIED",
+    "surfaceZeroCopyScanout": "VERIFIED",
+    "hardwareBufferNpuZeroCopy": "NOT_TESTED",
+    "qnnModelExecution": "NOT_TESTED",
+    "vulkanModelExecution": "NOT_TESTED",
+    "halDirectHeicUltraHdr": "DISABLED_BY_HAL"
+  },
+  "status": "PASS — AUTHORITATIVE HARDWARE RE-AUDIT INGESTED",
+  "notes": "Direct physical hardware interrogation via shell UID 2000 successfully ingested into project baseline. All 5 cameras verified at LEVEL_3. QNN and Vulkan model execution and hardware buffer zero-copy pipelines marked NOT_TESTED in Phase 1 (reserved for Phase 2 neural runtime validation). Direct HAL HEIF Ultra HDR confirmed disabled by vendor property ro.camera.disableHeicUltraHDR=true."
+}

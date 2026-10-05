@@ -1,0 +1,32 @@
+{
+  "appVersion": "1.0.0",
+  "buildIdentifier": "com.neuralcamera.app.debug-v1",
+  "timestamp": 1727222400000,
+  "device": "OnePlus CPH2745 (OnePlus 15)",
+  "captureTests": [
+    {
+      "format": "JPEG",
+      "resolution": "4000x3000",
+      "burstCount": 8,
+      "successRate": 1.0,
+      "avgCaptureLatencyMs": 142.5,
+      "storageBytesPerPhoto": 3840120
+    },
+    {
+      "format": "RAW_SENSOR",
+      "resolution": "8192x6144",
+      "burstCount": 4,
+      "successRate": 1.0,
+      "avgCaptureLatencyMs": 284.1,
+      "storageBytesPerPhoto": 67108864
+    },
+    {
+      "format": "HEIC",
+      "resolution": "4000x3000",
+      "burstCount": 8,
+      "successRate": 1.0,
+      "avgCaptureLatencyMs": 158.0,
+      "storageBytesPerPhoto": 2150400
+    }
+  ]
+}

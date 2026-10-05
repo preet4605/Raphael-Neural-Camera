@@ -43,4 +43,41 @@ class MediaRepositoryTest {
             assertEquals(4, masterFile.length())
         }
     }
+
+    @Test
+    fun testStorageSeparationModelsIntegrity() {
+        val original = OriginalCapture(
+            captureId = "cap_01",
+            format = "DNG",
+            rawBytes = byteArrayOf(10, 20),
+            width = 4096,
+            height = 3072,
+            timestampNs = 123456789L
+        )
+
+        val master = NeuralMaster(
+            masterId = "master_01",
+            format = "JPEG",
+            encodedBytes = byteArrayOf(30, 40),
+            width = 4096,
+            height = 3072,
+            confidenceScore = 0.98f
+        )
+
+        val metadata = CaptureStorageMetadata(
+            mediaId = "media_01",
+            iso = 100,
+            exposureTimeNs = 10_000_000L,
+            focalLengthMm = 5.59f,
+            lensFacing = "BACK_WIDE",
+            neuralAccelerationUsed = true,
+            appliedModelId = "neural-isp-lite-v1",
+            realityGuardPassed = true
+        )
+
+        assertEquals("cap_01", original.captureId)
+        assertEquals("master_01", master.masterId)
+        assertTrue(metadata.neuralAccelerationUsed)
+        assertTrue(metadata.realityGuardPassed)
+    }
 }
