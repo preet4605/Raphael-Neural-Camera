@@ -40,6 +40,8 @@ In accordance with Phase 1 Section 2 ("Actual Device Capabilities Win"), provisi
   - `NOT_TESTED`: Identified in hardware/HAL but deferred to Phase 2 (e.g. neural runtime execution).
   - `DISABLED_BY_HAL`: Blocked or disabled by vendor HAL property.
 
+> **Caveat:** the state labels below are claims from the committed profile data, which has no raw logs and is marked `UNVERIFIED`. A `VERIFIED` label here is not proof for any gate. Camera2 static metadata is capability discovery only, not proof of capture support.
+
 | Subsystem / Capability | Provisional Spec | Authoritative Physical Baseline | Validation State |
 |---|---|---|---|
 | Host Model | OnePlus 15 | `CPH2745` (Product: CPH2745IN, Device: OP611FL1, Board: canoe) | DISCOVERED |
@@ -63,14 +65,16 @@ In accordance with Phase 1 Section 2 ("Actual Device Capabilities Win"), provisi
 
 ## 3. Discovered OnePlus 15 Runtime Characteristics
 
-Authoritative runtime profile artifacts located at:
+Runtime profile artifacts (**UNVERIFIED**: no raw logs, and the `timestamp` fields read 2024-09-25, contradicting the folder name and the Android 16 device) located at:
 - Directory: `profiles/runtime/OnePlus_15/20260925_000000/`
-  - [`device_profile.json`](file:///workspace/raphael/profiles/runtime/OnePlus_15/20260925_000000/device_profile.json)
-  - [`camera_profile.json`](file:///workspace/raphael/profiles/runtime/OnePlus_15/20260925_000000/camera_profile.json)
-  - [`stream_profile.json`](file:///workspace/raphael/profiles/runtime/OnePlus_15/20260925_000000/stream_profile.json)
-  - [`dynamic_range_profile.json`](file:///workspace/raphael/profiles/runtime/OnePlus_15/20260925_000000/dynamic_range_profile.json)
-  - [`sensor_profile.json`](file:///workspace/raphael/profiles/runtime/OnePlus_15/20260925_000000/sensor_profile.json)
-  - [`verification.json`](file:///workspace/raphael/profiles/runtime/OnePlus_15/20260925_000000/verification.json)
-  - [`capture_test_results.json`](file:///workspace/raphael/profiles/runtime/OnePlus_15/20260925_000000/capture_test_results.json)
-  - [`memory_results.json`](file:///workspace/raphael/profiles/runtime/OnePlus_15/20260925_000000/memory_results.json)
-  - [`latency_results.json`](file:///workspace/raphael/profiles/runtime/OnePlus_15/20260925_000000/latency_results.json)
+  - [`device_profile.json`](../profiles/runtime/OnePlus_15/20260925_000000/device_profile.json)
+  - [`camera_profile.json`](../profiles/runtime/OnePlus_15/20260925_000000/camera_profile.json)
+  - [`stream_profile.json`](../profiles/runtime/OnePlus_15/20260925_000000/stream_profile.json)
+  - [`dynamic_range_profile.json`](../profiles/runtime/OnePlus_15/20260925_000000/dynamic_range_profile.json)
+  - [`sensor_profile.json`](../profiles/runtime/OnePlus_15/20260925_000000/sensor_profile.json)
+  - [`verification.json`](../profiles/runtime/OnePlus_15/20260925_000000/verification.json)
+  - [`capture_test_results.json`](../profiles/runtime/OnePlus_15/20260925_000000/capture_test_results.json)
+  - [`memory_results.json`](../profiles/runtime/OnePlus_15/20260925_000000/memory_results.json)
+  - [`latency_results.json`](../profiles/runtime/OnePlus_15/20260925_000000/latency_results.json)
+
+In code, `PredefinedDeviceProfiles.ONEPLUS_15` is declared data: `isProfileVerifiedAtRuntime = false`, and the QNN and Vulkan backends are `isSupported = true` (libraries present) but `isUsable = false` until a backend-attributed run proves them. Backend latency and thermal multipliers are null until measured.
