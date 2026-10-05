@@ -100,6 +100,8 @@ Interrogated from physical host OnePlus 15 (CPH2745, Android 16 API 36, SM8850 S
 
 ---
 
+> The classical temporal merge (alignment, motion-robust merge, RAW Bayer wrapper) is documented in [`TEMPORAL_PIPELINE.md`](TEMPORAL_PIPELINE.md). It is implemented and synthetic-data validated, and is not yet wired to this capture path.
+
 ## 7. Stream Configuration Matrix
 
 Planned via `CameraSessionPlanner` and tested by `StreamMatrixTester`. The status and latency values below come from the unverified profile data (no run log) and are not measurements:

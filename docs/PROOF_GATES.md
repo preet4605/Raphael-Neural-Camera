@@ -108,3 +108,10 @@ Pass requires: complete dataset, no selective reporting, no catastrophic failure
 improvement over both stock and GCam/SGCAM, no unacceptable HDR or motion regression, and blind
 preference consistent with the objective metrics. Comparable-but-not-better is
 `MERGE_ADVANTAGE=NOT_PROVEN`.
+
+### Gate 3 status
+
+Not started. The temporal merge core exists (`docs/TEMPORAL_PIPELINE.md`) and is validated on synthetic data only. Missing
+before a fair comparison is possible: real burst capture in the app, a colour pipeline (demosaic, tone, colour, HDR) and
+encoders so outputs are comparable photographs, the 30-scene dataset, frozen stock/GCam baselines, and the blind A/B
+protocol and tooling. `CLASSICAL_MERGE_ADVANTAGE_PROVEN` stays `FALSE`.

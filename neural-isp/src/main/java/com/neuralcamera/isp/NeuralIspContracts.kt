@@ -2,6 +2,7 @@ package com.neuralcamera.isp
 
 import com.neuralcamera.benchmarks.ExecutionMetrics
 import com.neuralcamera.cameracore.CameraFrame
+import com.neuralcamera.isp.temporal.FrameMergeStats
 import com.neuralcamera.quality.ConfidenceMap
 import com.neuralcamera.quality.ImageQualityScore
 import com.neuralcamera.quality.RealityGuardDecision
@@ -16,7 +17,9 @@ data class ProcessedImageResult(
     val qualityScore: ImageQualityScore,
     val metrics: ExecutionMetrics,
     val isNeuralAccelerated: Boolean,
-    val appliedPipelineName: String
+    val appliedPipelineName: String,
+    /** Per alternate frame: how much of it the temporal merge used (input for the quality engine). */
+    val temporalStats: List<FrameMergeStats> = emptyList()
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

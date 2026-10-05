@@ -43,8 +43,17 @@ data class RawBurstConfig(
     val height: Int = Gate1.FULL_RES_HEIGHT,
     val frameCount: Int = Gate1.MIN_FRAMES,
     val outputDir: File,
-    val timeoutMs: Long = 60_000L
-)
+    val timeoutMs: Long = 60_000L,
+    /**
+     * ImageReader queue size. Defaults to [frameCount] so the whole burst can be held while it is written. If the HAL
+     * refuses the session because it needs spare buffers, raise it (each full-resolution RAW buffer is ~96 MiB).
+     */
+    val maxImages: Int = frameCount
+) {
+    init {
+        require(maxImages >= frameCount) { "maxImages must be at least frameCount or frames could be dropped" }
+    }
+}
 
 /**
  * Gate 1 harness: captures a RAW_SENSOR burst through Camera2 as an ordinary app and records, per frame, everything the
@@ -52,7 +61,7 @@ data class RawBurstConfig(
  * Persists one DNG per frame (DngCreator) and fsyncs it. Blocking; call off the main thread. Needs CAMERA permission.
  *
  * Design notes:
- * - Frames are read with acquireNextImage() (never acquireLatestImage()), with maxImages == frameCount so the HAL never
+ * - Frames are read with acquireNextImage() (never acquireLatestImage()), with maxImages >= frameCount so the HAL never
  *   stalls while the app holds all frames of the burst until they are written.
  * - Images pair with results by SENSOR_TIMESTAMP; requests are identified by their tag, not by equality.
  * - The full-resolution RAW size is requested in whichever sensor pixel mode advertises it (DEFAULT, else
@@ -142,7 +151,7 @@ class RawBurstRecorder(private val context: Context) {
             }
 
             // One RAW reader holding the whole burst.
-            val imageReader = ImageReader.newInstance(config.width, config.height, ImageFormat.RAW_SENSOR, n)
+            val imageReader = ImageReader.newInstance(config.width, config.height, ImageFormat.RAW_SENSOR, config.maxImages)
             reader = imageReader
             imageReader.setOnImageAvailableListener({ r ->
                 while (true) {

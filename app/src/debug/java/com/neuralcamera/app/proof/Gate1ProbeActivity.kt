@@ -23,7 +23,7 @@ import java.util.Locale
  * Debug-only Gate 1 probe: captures an 8-frame full-resolution RAW_SENSOR burst as an ordinary app and writes
  * gate1_report.json, frames.csv and one DNG per frame to `<external files>/gate1/run_<time>_pid<pid>/`.
  * Each of the three required runs must be a separate process; tools/proof/run_gate1_adb.sh automates that and then runs
- * the independent checker (tools/proof/check_gate1.py). Extras: `--ez autorun true`, `--es camera <id>`.
+ * the independent checker (tools/proof/check_gate1.py). Extras: `--ez autorun true`, `--es camera <id>`, `--ei maxImages <n>`.
  * A run writes about 800 MB of DNG files.
  */
 class Gate1ProbeActivity : Activity() {
@@ -94,7 +94,11 @@ class Gate1ProbeActivity : Activity() {
         append("output: ${outDir.absolutePath}")
         val evidence = RawBurstRecorder(this)
             .record(
-                RawBurstConfig(cameraId = intent.getStringExtra("camera"), outputDir = outDir),
+                RawBurstConfig(
+                    cameraId = intent.getStringExtra("camera"),
+                    outputDir = outDir,
+                    maxImages = intent.getIntExtra("maxImages", Gate1.MIN_FRAMES)
+                ),
                 Process.getStartElapsedRealtime()
             ) { append(it) }
             .copy(device = ProbeInfo.device())
