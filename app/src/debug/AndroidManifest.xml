@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Debug-only proof tool. Exported so `adb shell am start` can launch it; absent from release builds. -->
+        <activity
+            android:name=".proof.Gate2ProbeActivity"
+            android:exported="true"
+            android:label="Gate 2 probe"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+    </application>
+
+</manifest>

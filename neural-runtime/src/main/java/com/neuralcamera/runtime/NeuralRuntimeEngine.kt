@@ -14,6 +14,7 @@ class StandardModelRegistry : ModelRegistry {
 
     init {
         registerModel(PredefinedModelCatalog.CLASSICAL_BASELINE_ISP)
+        registerModel(PredefinedModelCatalog.DENOISE_TINY_V1)
         registerModel(PredefinedModelCatalog.NEURAL_ISP_LITE)
         registerModel(PredefinedModelCatalog.PERCEPTION_SCENE_ALIGNMENT)
         registerModel(PredefinedModelCatalog.OMNI_NEURAL_4B_MOBILE)
@@ -124,7 +125,7 @@ class AdaptivePipelineScheduler(
         val requestedModel = modelRegistry.getModel(requestedModelId)
             ?: return ScheduledPipeline(
                 selectedModel = PredefinedModelCatalog.CLASSICAL_BASELINE_ISP,
-                selectedBackend = HardwareBackendType.XNNPACK_CPU,
+                selectedBackend = HardwareBackendType.CPU_REFERENCE,
                 maxFramesToProcess = 1,
                 useClassicalFallback = true,
                 scheduleReason = "Requested model $requestedModelId not found; fell back to classical ISP."
@@ -135,7 +136,7 @@ class AdaptivePipelineScheduler(
             val fallback = modelRegistry.findFallbackFor(requestedModelId) ?: PredefinedModelCatalog.CLASSICAL_BASELINE_ISP
             return ScheduledPipeline(
                 selectedModel = fallback,
-                selectedBackend = HardwareBackendType.XNNPACK_CPU,
+                selectedBackend = HardwareBackendType.CPU_REFERENCE,
                 maxFramesToProcess = thermalManager.getMaxAllowedBurstFrames(),
                 useClassicalFallback = true,
                 scheduleReason = "Thermal state ${thermalManager.getCurrentThermalState()} is severe; fallback to classical ISP."
@@ -147,7 +148,7 @@ class AdaptivePipelineScheduler(
             val fallback = modelRegistry.findFallbackFor(requestedModelId) ?: PredefinedModelCatalog.CLASSICAL_BASELINE_ISP
             return ScheduledPipeline(
                 selectedModel = fallback,
-                selectedBackend = HardwareBackendType.XNNPACK_CPU,
+                selectedBackend = HardwareBackendType.CPU_REFERENCE,
                 maxFramesToProcess = thermalManager.getMaxAllowedBurstFrames(),
                 useClassicalFallback = true,
                 scheduleReason = "Model $requestedModelId is ${requestedModel.compatibilityState}, not VERIFIED; fell back to classical ISP."
@@ -160,14 +161,14 @@ class AdaptivePipelineScheduler(
             val fallback = modelRegistry.findFallbackFor(requestedModelId) ?: PredefinedModelCatalog.CLASSICAL_BASELINE_ISP
             return ScheduledPipeline(
                 selectedModel = fallback,
-                selectedBackend = HardwareBackendType.XNNPACK_CPU,
+                selectedBackend = HardwareBackendType.CPU_REFERENCE,
                 maxFramesToProcess = 2,
                 useClassicalFallback = true,
                 scheduleReason = "Memory pressure: cannot allocate ${requiredBytes / (1024 * 1024)}MB for model."
             )
         }
 
-        // Rule 17: Prefer Qualcomm QNN NPU, then Vulkan, then XNNPACK CPU
+        // Rule 17: Prefer Qualcomm QNN NPU, then Vulkan, then the best proven CPU path, else the CPU reference
         val preferredBackend = when {
             deviceProfile.backends[HardwareBackendType.QUALCOMM_QNN_NPU]?.isUsable == true &&
                     requestedModel.supportedBackends.contains(HardwareBackendType.QUALCOMM_QNN_NPU) -> {
@@ -177,7 +178,15 @@ class AdaptivePipelineScheduler(
                     requestedModel.supportedBackends.contains(HardwareBackendType.VULKAN_GPU) -> {
                 HardwareBackendType.VULKAN_GPU
             }
-            else -> HardwareBackendType.XNNPACK_CPU
+            deviceProfile.backends[HardwareBackendType.ORT_CPU]?.isUsable == true &&
+                    requestedModel.supportedBackends.contains(HardwareBackendType.ORT_CPU) -> {
+                HardwareBackendType.ORT_CPU
+            }
+            deviceProfile.backends[HardwareBackendType.XNNPACK_CPU]?.isUsable == true &&
+                    requestedModel.supportedBackends.contains(HardwareBackendType.XNNPACK_CPU) -> {
+                HardwareBackendType.XNNPACK_CPU
+            }
+            else -> HardwareBackendType.CPU_REFERENCE
         }
 
         val maxFrames = thermalManager.getMaxAllowedBurstFrames()
@@ -226,10 +235,11 @@ class StandardInferenceRuntime(
 
         return InferenceResult(
             requestId = request.requestId,
-            outputTensor = output,
+            outputTensor = output.tensor,
             executionLatencyMs = latency,
             backendUsed = backend.backendType,
-            isFallbackUsed = scheduled.useClassicalFallback
+            isFallbackUsed = scheduled.useClassicalFallback,
+            attribution = output.attribution
         )
     }
 

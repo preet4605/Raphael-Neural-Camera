@@ -175,10 +175,20 @@ object PredefinedDeviceProfiles {
                 isSupported = true,
                 isUsable = false
             ),
+            HardwareBackendType.ORT_CPU to BackendProfile(
+                backendType = HardwareBackendType.ORT_CPU,
+                isSupported = true,
+                isUsable = false // until an on-device run proves ONNX Runtime loads and executes
+            ),
             HardwareBackendType.XNNPACK_CPU to BackendProfile(
                 backendType = HardwareBackendType.XNNPACK_CPU,
                 isSupported = true,
-                isUsable = true
+                isUsable = false // XNNPACK is not integrated yet
+            ),
+            HardwareBackendType.CPU_REFERENCE to BackendProfile(
+                backendType = HardwareBackendType.CPU_REFERENCE,
+                isSupported = true,
+                isUsable = true // pure Kotlin, no hardware dependency; guaranteed fallback
             )
         ),
         thermalLimits = ThermalLimits(
@@ -225,10 +235,20 @@ object PredefinedDeviceProfiles {
                 isSupported = true,
                 isUsable = false
             ),
+            HardwareBackendType.ORT_CPU to BackendProfile(
+                backendType = HardwareBackendType.ORT_CPU,
+                isSupported = true,
+                isUsable = false // until an on-device run proves ONNX Runtime loads and executes
+            ),
             HardwareBackendType.XNNPACK_CPU to BackendProfile(
                 backendType = HardwareBackendType.XNNPACK_CPU,
                 isSupported = true,
-                isUsable = true
+                isUsable = false // XNNPACK is not integrated yet
+            ),
+            HardwareBackendType.CPU_REFERENCE to BackendProfile(
+                backendType = HardwareBackendType.CPU_REFERENCE,
+                isSupported = true,
+                isUsable = true // pure Kotlin, no hardware dependency; guaranteed fallback
             )
         ),
         thermalLimits = ThermalLimits(),
@@ -266,7 +286,12 @@ object PredefinedDeviceProfiles {
             HardwareBackendType.XNNPACK_CPU to BackendProfile(
                 backendType = HardwareBackendType.XNNPACK_CPU,
                 isSupported = true,
-                isUsable = true
+                isUsable = false // XNNPACK is not integrated yet
+            ),
+            HardwareBackendType.CPU_REFERENCE to BackendProfile(
+                backendType = HardwareBackendType.CPU_REFERENCE,
+                isSupported = true,
+                isUsable = true // pure Kotlin, no hardware dependency; guaranteed fallback
             )
         ),
         thermalLimits = ThermalLimits(

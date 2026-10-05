@@ -1,13 +1,14 @@
 package com.neuralcamera.models
 
 /**
- * Catalog of planned model descriptors. Nothing here is verified: no model artifact exists in this
- * repository and no model has been executed on any backend.
+ * Catalog of planned model descriptors. Nothing here is verified. Only [PredefinedModelCatalog.DENOISE_TINY_V1]
+ * has artifacts in this repository (a deterministic runtime-validation network); no model has been executed on any
+ * hardware backend.
  *
  * - Measured fields (latency, memory, thermal cost) are null until measured on-device.
  * - `fileSizeBytes` is 0 until an artifact is provisioned; `license` stays UNSPECIFIED until confirmed.
  * - Every entry stays [ModelCompatibilityState.UNVERIFIED] until a run with in-process backend
- *   attribution promotes it.
+ *   attribution promotes it (that evidence must come from the on-device Gate 2 report).
  * - Formats, resolutions, precision and backend lists are design intent, not evidence.
  */
 object PredefinedModelCatalog {
@@ -31,6 +32,36 @@ object PredefinedModelCatalog {
         compatibilityRequirements = listOf("Android 11+"),
         fallbackModelId = null,
         isClassicalFallback = true,
+        compatibilityState = ModelCompatibilityState.UNVERIFIED
+    )
+
+    /**
+     * Untrained deterministic residual conv net (see tools/model_gen/gen_denoise_tiny.py). The only entry with real
+     * artifacts in this repository, used for the Gate 2 runtime proof. Not a real denoiser.
+     */
+    val DENOISE_TINY_V1 = ModelDescriptor(
+        modelId = "denoise-tiny-v1",
+        name = "Deterministic Denoise-Shaped Test Network",
+        purpose = SemanticPurpose.RUNTIME_VALIDATION,
+        version = ModelVersion(1, 0, 0),
+        license = "UNSPECIFIED",
+        fileSizeBytes = 3582L, // denoise_tiny_v1_fp32.onnx
+        inputFormat = "FP32_NCHW_LUMA",
+        outputFormat = "FP32_NCHW_LUMA",
+        inputResolution = Pair(256, 256),
+        outputResolution = Pair(256, 256),
+        tensorPrecision = TensorPrecision.FP32,
+        supportedBackends = listOf(
+            HardwareBackendType.QUALCOMM_QNN_NPU,
+            HardwareBackendType.ORT_CPU,
+            HardwareBackendType.CPU_REFERENCE
+        ),
+        memoryRequirementBytes = null,
+        expectedLatencyMs = null,
+        thermalCostScore = null,
+        compatibilityRequirements = listOf("Never in camera hot path"),
+        fallbackModelId = CLASSICAL_BASELINE_ISP.modelId,
+        isClassicalFallback = false,
         compatibilityState = ModelCompatibilityState.UNVERIFIED
     )
 

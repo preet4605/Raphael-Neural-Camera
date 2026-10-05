@@ -14,10 +14,10 @@ The design treats capture as one runtime graph: multi-frame acquisition, IMU tim
 |---|---|
 | 0 — Foundation | Complete |
 | 1 — Hardware discovery / device profile | Code complete. The committed OnePlus 15 data under `profiles/runtime/` is **UNVERIFIED** (no raw audit logs committed). |
-| 2 — Neural runtime foundation | **NEXT — not started** |
+| 2 — Neural runtime foundation | **IN PROGRESS.** Implemented: backend attribution contract, FP32 CPU reference backend, ONNX Runtime backend (CPU EP and QNN EP on the Hexagon HTP), the Gate 2 harness and an independent evidence checker. **Not yet done: any on-device run.** |
 | 3+ — Computational photography / Neural ISP | After runtime validation |
 
-Earlier commit messages that call Phase 2 complete are wrong: there is no QNN/Vulkan/CPU inference backend, no test network and no backend attribution yet.
+Earlier commit messages that call Phase 2 complete were wrong at the time. The Phase 2 code now exists, but it has never run on the device, so no gate is proven.
 
 **Proof flags** (definitions in [`docs/PROOF_GATES.md`](docs/PROOF_GATES.md)); all stay `FALSE` until evidence exists:
 
@@ -32,7 +32,7 @@ FULL_PIPELINE_PROVEN=FALSE
 
 **What is not implemented today**
 - Burst capture: `RealCamera2Controller.triggerBurstCapture` returns no frames, so the shutter reports an error instead of saving anything.
-- Neural inference: no backend exists; `StandardInferenceRuntime` throws `BackendUnavailableException` rather than returning unprocessed input. The model catalog is placeholders, all `UNVERIFIED` with no measured numbers.
+- Neural inference in the camera: nothing uses it. A CPU reference backend and an ONNX Runtime backend (CPU EP, QNN EP/HTP) exist for one validation network (`denoise-tiny-v1`); no on-device run has happened, so HTP execution is unproven. The rest of the model catalog is placeholders, all `UNVERIFIED` with no measured numbers. `StandardInferenceRuntime` throws `BackendUnavailableException` rather than returning unprocessed input.
 - Image pipeline: `BaselineImagePipeline` is a luma-only per-pixel mean over frames, with no alignment or motion rejection, and writes grayscale output. It is not the motion-aware merge the design requires.
 - Encoding: there is no JPEG/DNG/HEIF encoder. Saved files are unencoded planes (`.raw`).
 - Reality Guard: a heuristic comparison of reconstructed vs. original luma. It is not hallucination detection and not cryptographic provenance.
@@ -63,7 +63,7 @@ Output (:gallery)
 | `:app` | Application entrypoint, dependency orchestration, and camera permission handling. |
 | `:camera-core` | Low-level Camera2 controller, session planner, bounded ring buffers, and sensor timeline synchronizer. |
 | `:capture-intelligence` | Scene metering, exposure bracket planning, and motion/jitter analysis. |
-| `:neural-runtime` | Model registry, scheduler, thermal/memory budgeting and the inference-runtime contract. No backend (QNN, Vulkan, CPU) is implemented yet. |
+| `:neural-runtime` | Model registry, scheduler, thermal/memory budgeting, the inference-runtime contract, the FP32 CPU reference backend, an ONNX Runtime backend (CPU/QNN) and the Gate 2 proof harness. No Vulkan backend; no on-device run yet. |
 | `:neural-isp` | Classical luma-only frame-averaging baseline. Neural demosaic, denoise and HDR fusion are planned. |
 | `:quality-engine` | Heuristic quality scoring and the Reality Guard divergence check (not hallucination detection or provenance). |
 | `:video-engine` | Video pipeline contracts and a baseline implementation; not validated on device. |

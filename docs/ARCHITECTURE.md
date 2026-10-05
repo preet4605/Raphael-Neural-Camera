@@ -80,7 +80,7 @@ graph TD
 4. `:quality-engine`: Image quality evaluator, sensor confidence estimator, and the Reality Guard heuristic divergence check (not hallucination detection or provenance).
 5. `:camera-core`: Camera2 contracts, deterministic state machine (`CameraState`), structured error hierarchy (`CameraSystemError`), buffer leasing contracts (`FrameBufferHandle`), and bounded ring buffer repositories.
 6. `:capture-intelligence`: Scene luminance & motion estimation, universal capture planning across shooting modes (AUTO, PRO, MASTER, AUTHENTIC).
-7. `:neural-runtime`: Model registry, adaptive scheduler, thermal budget manager, memory allocation manager, and the `InferenceRuntime`/`InferenceBackend` contracts. No hardware backend is implemented yet.
+7. `:neural-runtime`: Model registry, adaptive scheduler, thermal budget manager, memory allocation manager, the `InferenceRuntime`/`InferenceBackend` contracts with in-process attribution, the FP32 CPU reference backend, an ONNX Runtime backend (CPU EP, QNN EP on the HTP) and the Gate 2 proof harness. No hardware execution has been observed yet.
 8. `:neural-isp`: Multi-frame temporal fusion, classical baseline ISP fallback pipeline (Zero Fake AI).
 9. `:video-engine`: Video pipeline enforcing bounded compute per frame (selective keyframe enhancement, hardware passthrough).
 10. `:gallery`: Non-destructive dual-storage repository (Original + Master + JSON metadata).
@@ -165,7 +165,7 @@ In adherence to Section 18 of the Constitution:
 
 ## 8. Phase Status, Phase 1 Implementation & Scope Boundary
 
-- **Current state**: Phase 0 (foundation) and Phase 1 (hardware discovery / device profile) are complete in code. **Phase 2 (neural runtime foundation) is NEXT and not started.** Earlier commit messages calling Phase 2 complete were wrong. All proof flags are `FALSE`; see [`PROOF_GATES.md`](PROOF_GATES.md).
+- **Current state**: Phase 0 (foundation) and Phase 1 (hardware discovery / device profile) are complete in code. **Phase 2 (neural runtime foundation) is IN PROGRESS: the backends and the Gate 2 harness exist but have never run on the device.** Earlier commit messages calling Phase 2 complete were wrong when written. All proof flags are `FALSE`; see [`PROOF_GATES.md`](PROOF_GATES.md).
 - **Known gaps in the Phase 1 list below**: `triggerBurstCapture` returns no frames (no burst acquisition); the diagnostics sheet fields read `N/A` until measured; the committed OnePlus 15 profile data is **UNVERIFIED** (no raw audit logs; its timestamps contradict its folder name); no encoder produces valid JPEG/DNG.
 
 - **Phase 1 Scope Completed**:

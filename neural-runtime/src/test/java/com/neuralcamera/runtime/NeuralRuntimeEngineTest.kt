@@ -48,7 +48,7 @@ class NeuralRuntimeEngineTest {
 
         val scheduled = scheduler.scheduleExecution(verifiedModel.modelId, targetFps = 30)
 
-        assertEquals(HardwareBackendType.XNNPACK_CPU, scheduled.selectedBackend)
+        assertEquals(HardwareBackendType.CPU_REFERENCE, scheduled.selectedBackend)
     }
 
     @Test
@@ -60,7 +60,7 @@ class NeuralRuntimeEngineTest {
 
         assertTrue(scheduled.useClassicalFallback)
         assertEquals(PredefinedModelCatalog.CLASSICAL_BASELINE_ISP, scheduled.selectedModel)
-        assertEquals(HardwareBackendType.XNNPACK_CPU, scheduled.selectedBackend)
+        assertEquals(HardwareBackendType.CPU_REFERENCE, scheduled.selectedBackend)
         assertTrue(scheduled.scheduleReason.contains("not VERIFIED"))
     }
 
@@ -85,7 +85,7 @@ class NeuralRuntimeEngineTest {
         val scheduled = scheduler.scheduleExecution(verifiedModel.modelId, targetFps = 30)
 
         assertTrue(scheduled.useClassicalFallback)
-        assertEquals(HardwareBackendType.XNNPACK_CPU, scheduled.selectedBackend)
+        assertEquals(HardwareBackendType.CPU_REFERENCE, scheduled.selectedBackend)
         assertEquals(profile.thermalLimits.maxBurstFramesThrottled, scheduled.maxFramesToProcess)
     }
 
@@ -127,15 +127,16 @@ class NeuralRuntimeEngineTest {
     fun testInferenceAttributesResultToExecutingBackend() {
         val executed = byteArrayOf(9, 9, 9, 9)
         val backend = object : InferenceBackend {
-            override val backendType = HardwareBackendType.XNNPACK_CPU
+            override val backendType = HardwareBackendType.CPU_REFERENCE
             override fun isAvailable() = true
             override suspend fun initialize() = true
+            override suspend fun prepare(model: ModelDescriptor) = true
             override suspend fun executeInference(model: ModelDescriptor, input: TensorData) =
-                TensorData(input.shape, executed)
+                InferenceOutput(TensorData(input.shape, executed), BackendAttribution.cpuReference())
             override fun release() {}
         }
         val runtime = StandardInferenceRuntime(
-            registry, scheduler, backends = mapOf(HardwareBackendType.XNNPACK_CPU to backend)
+            registry, scheduler, backends = mapOf(HardwareBackendType.CPU_REFERENCE to backend)
         )
 
         val result = runBlocking {
@@ -144,7 +145,9 @@ class NeuralRuntimeEngineTest {
             )
         }
 
-        assertEquals(HardwareBackendType.XNNPACK_CPU, result.backendUsed)
+        assertEquals(HardwareBackendType.CPU_REFERENCE, result.backendUsed)
+        assertEquals(ExecutionTarget.CPU_REFERENCE, result.attribution.target)
+        assertFalse(result.attribution.provesHtp)
         assertTrue(result.outputTensor.buffer.contentEquals(executed))
     }
 }

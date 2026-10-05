@@ -34,5 +34,8 @@ dependencies {
     implementation(project(":benchmarks"))
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+    // ONNX Runtime with the QNN execution provider. Its POM pulls Qualcomm's com.qualcomm.qti:qnn-runtime (HTP stubs and
+    // skels), so the app bundles its own QNN runtime instead of depending on vendor libraries a normal app cannot load.
+    implementation("com.microsoft.onnxruntime:onnxruntime-android-qnn:1.29.0")
     testImplementation("junit:junit:4.13.2")
 }
