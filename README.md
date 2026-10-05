@@ -31,7 +31,7 @@ FULL_PIPELINE_PROVEN=FALSE
 ```
 
 **What is not implemented today**
-- Burst capture: `RealCamera2Controller.triggerBurstCapture` returns no frames, so the shutter reports an error instead of saving anything.
+- Burst capture in the camera UI: `RealCamera2Controller.triggerBurstCapture` returns no frames, so the shutter reports an error instead of saving anything. A separate debug-only Gate 1 recorder (`RawBurstRecorder`) can capture a full-resolution RAW burst as DNG files, but it has never run on the device.
 - Neural inference in the camera: nothing uses it. A CPU reference backend and an ONNX Runtime backend (CPU EP, QNN EP/HTP) exist for one validation network (`denoise-tiny-v1`); no on-device run has happened, so HTP execution is unproven. The rest of the model catalog is placeholders, all `UNVERIFIED` with no measured numbers. `StandardInferenceRuntime` throws `BackendUnavailableException` rather than returning unprocessed input.
 - Image pipeline: `BaselineImagePipeline` is a luma-only per-pixel mean over frames, with no alignment or motion rejection, and writes grayscale output. It is not the motion-aware merge the design requires.
 - Encoding: there is no JPEG/DNG/HEIF encoder. Saved files are unencoded planes (`.raw`).

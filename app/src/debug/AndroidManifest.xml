@@ -8,6 +8,12 @@
             android:exported="true"
             android:label="Gate 2 probe"
             android:theme="@android:style/Theme.Material.NoActionBar" />
+
+        <activity
+            android:name=".proof.Gate1ProbeActivity"
+            android:exported="true"
+            android:label="Gate 1 probe"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
     </application>
 
 </manifest>

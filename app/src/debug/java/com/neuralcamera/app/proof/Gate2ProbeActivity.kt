@@ -2,7 +2,6 @@ package com.neuralcamera.app.proof
 
 import android.app.Activity
 import android.graphics.Typeface
-import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import android.system.Os
@@ -87,8 +86,8 @@ class Gate2ProbeActivity : Activity() {
 
         val suite = Gate2Suite(
             sampler = AndroidSystemSampler(this),
-            device = deviceInfo(),
-            app = appInfo(),
+            device = ProbeInfo.device(),
+            app = ProbeInfo.app(this),
             processStartElapsedRealtimeMs = Process.getStartElapsedRealtime(),
             nativeLibraryDir = nativeDir
         )
@@ -96,26 +95,4 @@ class Gate2ProbeActivity : Activity() {
         append("done: ${result.reportFiles.size} reports; summary ${result.summaryFile.name}")
         append("Verdicts come from: python3 tools/proof/check_gate2.py <pulled dir>")
     }
-
-    private fun deviceInfo(): Map<String, String> = linkedMapOf(
-        "manufacturer" to Build.MANUFACTURER,
-        "model" to Build.MODEL,
-        "device" to Build.DEVICE,
-        "product" to Build.PRODUCT,
-        "board" to Build.BOARD,
-        "hardware" to Build.HARDWARE,
-        "fingerprint" to Build.FINGERPRINT,
-        "sdkInt" to Build.VERSION.SDK_INT.toString(),
-        "release" to Build.VERSION.RELEASE,
-        "securityPatch" to Build.VERSION.SECURITY_PATCH,
-        "supportedAbis" to Build.SUPPORTED_ABIS.joinToString(),
-        "socModel" to (if (Build.VERSION.SDK_INT >= 31) Build.SOC_MODEL else "n/a"),
-        "socManufacturer" to (if (Build.VERSION.SDK_INT >= 31) Build.SOC_MANUFACTURER else "n/a")
-    )
-
-    private fun appInfo(): Map<String, String> = linkedMapOf(
-        "packageName" to packageName,
-        "versionName" to (packageManager.getPackageInfo(packageName, 0).versionName ?: "n/a"),
-        "debuggable" to ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0).toString()
-    )
 }

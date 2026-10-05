@@ -28,6 +28,33 @@ dimensions, format, dropped-frame status.
 Pass: 8/8 valid full-resolution RAW frames, zero drops, zero duplicates, valid metadata, monotonic
 timestamps, app stays alive, outputs inspectable, reproducible for 3 runs. Then `RAW_BURST_PROVEN=TRUE`.
 
+### How Gate 1 is run and judged
+
+- **Recorder**: `RawBurstRecorder` (`:camera-core`) runs inside the debug-only `Gate1ProbeActivity`. It opens a back
+  camera that advertises RAW_SENSOR 8192x6144 (preferring a physical camera over the logical multi-camera), requests the
+  size in whichever sensor pixel mode advertises it (DEFAULT, else MAXIMUM_RESOLUTION, in which case the session holds
+  only the RAW stream and has no preview), and captures an 8-request burst with `acquireNextImage()` and
+  `maxImages == 8`, so nothing is silently dropped. A frame that does not arrive is recorded as dropped; frames are never
+  duplicated, substituted or synthesized.
+- **Persisted outputs** (per run): `gate1_report.json` (raw per-frame records and camera characteristics), `frames.csv`,
+  and one DNG per frame written with `DngCreator` and fsynced. A run writes about 800 MB.
+- **Per-frame record**: request order, frame number, capture (sensor) timestamp, image timestamp, image and result arrival
+  times (`elapsedRealtimeNanos`), exposure time, ISO, dimensions, format, row/pixel stride, plane size, SHA-256 of the
+  pixel bytes, DNG file and size, dropped status and reason.
+- **Run it**: install the debug build, then `tools/proof/run_gate1_adb.sh` (three fresh processes, pulls the evidence,
+  runs the checker), or launch `Gate1ProbeActivity` three times, force-stopping the app between runs, and run
+  `python3 tools/proof/check_gate1.py <pulled gate1 directory>`.
+- **Judge**: only `tools/proof/check_gate1.py`. It ignores the app's own evaluation, re-derives every criterion from the
+  raw records, and parses the DNG files themselves (raw IFD of exactly 8192x6144, uncompressed 16-bit CFA, DNGVersion
+  present, data length 8192*6144*2) and hashes their raw pixel data, so duplicates are detected from the stored outputs.
+  `RAW_BURST_PROVEN=TRUE` needs at least three independent runs (distinct run ids and process starts) on one device, all
+  passing, with no failing run among those provided.
+- **Ordinary app**: the report records `isSystemApp`, the uid and the granted permissions (CAMERA only is expected); the
+  checker requires a non-system app with uid >= 10000. Whether the OEM exposes the full-resolution RAW stream to
+  third-party apps is exactly what this gate tests; a failure here is a valid result.
+
+Until a device run produces evidence that passes the checker, `RAW_BURST_PROVEN` stays `FALSE`.
+
 ## Gate 2: real HTP inference
 
 Test: small deterministic denoise model with fixed input/output, deterministic pre/post-processing
