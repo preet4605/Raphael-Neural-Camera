@@ -64,7 +64,7 @@ it end to end on a synthetic burst.
 - **Memory.** The merge holds the frames plus about 12 bytes per pixel of working arrays: workable at 12 MP, not at the
   50 MP full-resolution size without banded processing.
 - **Not a full ISP.** `color/` is a conservative baseline (demosaic, colour matrix, global tone curve). No lens shading, sharpening, local tone mapping or HDR rendering; the 8-bit camera baseline is still luma only.
-- **Not wired to capture.** The camera UI's burst path still returns no frames.
+- **Capture is wired, but to YUV, and untested on a device.** `RealCamera2Controller.triggerBurstCapture` now captures a real `captureBurst` into a YUV_420_888 reader (largest size up to 8.5 MP), copies and closes each image on arrival, pairs images with results by `SENSOR_TIMESTAMP` (`BurstCollector`, JVM-tested), and returns only frames actually captured (failed or lost frames are absent; the count is capped by a 100 MB copy budget). The HAL has already denoised these frames, so they are not the RAW burst the project targets; the app still feeds them to the luma baseline. RAW capture into the Bayer merge waits on Gate 1. The code compiles against the Android API but has never run on hardware. Exposure bracketing is not wired (a bracket request returns no frames).
 
 ## Next steps toward Gate 3
 

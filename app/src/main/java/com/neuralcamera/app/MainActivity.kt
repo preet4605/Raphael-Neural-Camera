@@ -101,13 +101,17 @@ class MainActivity : ComponentActivity() {
         // 2. Acquire real hardware frames
         val frames = app.cameraController.triggerBurstCapture(plan.temporalFrameCount)
         check(frames.isNotEmpty()) { "Capture returned no frames; nothing was saved." }
+        app.telemetryLogger.logEvent(
+            "BURST_CAPTURED",
+            mapOf("requested" to plan.temporalFrameCount, "received" to frames.size, "format" to frames.first().format, "size" to "${frames.first().width}x${frames.first().height}")
+        )
         val reference = frames.last().metadata
 
         // 3. Process frames through baseline pipeline (classical only; no neural backend is verified)
         val result = app.imagePipeline.processFrames(
             frames = frames,
-            targetWidth = 1920,
-            targetHeight = 1080,
+            targetWidth = frames.first().width,
+            targetHeight = frames.first().height,
             requestNeuralAcceleration = false
         )
 
