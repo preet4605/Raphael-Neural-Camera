@@ -3,6 +3,9 @@ import com.neuralcamera.isp.color.ColorPipeline
 import com.neuralcamera.isp.dng.DngPreview
 import com.neuralcamera.isp.dng.DngRawImage
 import com.neuralcamera.isp.dng.DngReader
+import com.neuralcamera.isp.encode.DngMetadata
+import com.neuralcamera.isp.encode.DngWriter
+import com.neuralcamera.isp.encode.JpegEncoder
 import com.neuralcamera.isp.temporal.BayerFrame
 import com.neuralcamera.isp.temporal.BayerRadiometry
 import com.neuralcamera.isp.temporal.BayerTemporalMerge
@@ -84,7 +87,7 @@ object BurstMergeTool {
             images = images.map { img ->
                 val data = ShortArray(w * h)
                 for (row in 0 until h) System.arraycopy(img.mosaic.data, (y + row) * img.width + x, data, row * w, w)
-                DngRawImage(w, h, img.cfa, img.blackLevels, img.whiteLevel, img.noise, img.asShotNeutral, img.exposureTimeSeconds, img.iso, U16Plane(w, h, data), img.notes, img.colorMatrix1, img.forwardMatrix1)
+                DngRawImage(w, h, img.cfa, img.blackLevels, img.whiteLevel, img.noise, img.asShotNeutral, img.exposureTimeSeconds, img.iso, U16Plane(w, h, data), img.notes, img.colorMatrix1, img.forwardMatrix1, img.calibrationIlluminant1, img.uniqueCameraModel)
             }
         }
         val width = images[0].width
@@ -136,6 +139,27 @@ object BurstMergeTool {
         writePng8(File(o.output, "reference_color.png"), refColor.srgb8, width, height)
         writePng8(File(o.output, "merged_color.png"), mergedColor.srgb8, width, height)
 
+        // Real encoders: a linear merged DNG (needs the source's colour calibration) and a JPEG of the colour render.
+        val dngStatus: Any = try {
+            val neutral = ref.asShotNeutral
+            if (neutral == null || (ref.colorMatrix1 == null && ref.forwardMatrix1 == null) || ref.uniqueCameraModel == null ||
+                (ref.colorMatrix1 != null && ref.calibrationIlluminant1 == null)
+            ) {
+                "skipped: the source DNG lacks AsShotNeutral, a colour matrix (with illuminant) or UniqueCameraModel"
+            } else {
+                val meta = DngMetadata(
+                    ref.cfa, ref.blackLevels, ref.whiteLevel, neutral, ref.colorMatrix1, ref.forwardMatrix1, ref.calibrationIlluminant1,
+                    ref.uniqueCameraModel, software = "Raphael burst_merge", exposureTimeSeconds = ref.exposureTimeSeconds, iso = ref.iso
+                )
+                val dng = DngWriter.write(result.mosaic, meta)
+                File(o.output, "merged.dng").writeBytes(dng.bytes)
+                mapOf("file" to "merged.dng", "clippedLow" to dng.clippedLow, "clippedHigh" to dng.clippedHigh)
+            }
+        } catch (e: Exception) {
+            "failed: ${e.message}"
+        }
+        File(o.output, "merged_color.jpg").writeBytes(JpegEncoder.encodeRgb(mergedColor.srgb8, width, height, quality = 92))
+
         fun greenSigma(norm: FloatPlane): Double {
             val pw = width / 2
             val ph = height / 2
@@ -157,6 +181,7 @@ object BurstMergeTool {
             "size" to mapOf("width" to width, "height" to height, "crop" to o.crop?.toList()),
             "cfa" to first.cfa.name,
             "colorTransform" to transform.source.name,
+            "mergedDng" to dngStatus,
             "whiteLevel" to first.whiteLevel,
             "blackLevels" to ref.blackLevels.toList(),
             "noise" to mapOf("source" to noiseSource, "perCfaPosition" to noise.map { mapOf("shot" to it.shot, "read" to it.read) }),
@@ -168,7 +193,7 @@ object BurstMergeTool {
             "notes" to notes
         )
         File(o.output, "merge_report.json").writeText(Json.stringify(report))
-        out.println("wrote ${o.output}: merged.pgm, reference_preview.png, merged_preview.png, reference_color.png, merged_color.png (colour: ${transform.source}), merge_report.json")
+        out.println("wrote ${o.output}: merged.pgm, reference_preview.png, merged_preview.png, reference_color.png, merged_color.png, merged_color.jpg, merged.dng if calibrated (colour: ${transform.source}), merge_report.json")
         out.println("green-plane noise sigma: reference %.5f -> merged %.5f (ratio %.2f); merge took %.1f s".format(sigmaRef, sigmaMerged, if (sigmaRef > 0) sigmaMerged / sigmaRef else Double.NaN, mergeSeconds))
         result.frameStats.forEach { out.println("  alt ${it.altIndex}: meanWeight %.2f, tiles rejected %d/%d".format(it.meanWeight, it.tilesRejected, it.tilesTotal)) }
         return 0

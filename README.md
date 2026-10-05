@@ -34,7 +34,7 @@ FULL_PIPELINE_PROVEN=FALSE
 - Burst capture in the camera UI: `RealCamera2Controller.triggerBurstCapture` returns no frames, so the shutter reports an error instead of saving anything. A separate debug-only Gate 1 recorder (`RawBurstRecorder`) can capture a full-resolution RAW burst as DNG files, but it has never run on the device.
 - Neural inference in the camera: nothing uses it. A CPU reference backend and an ONNX Runtime backend (CPU EP, QNN EP/HTP) exist for one validation network (`denoise-tiny-v1`); no on-device run has happened, so HTP execution is unproven. The rest of the model catalog is placeholders, all `UNVERIFIED` with no measured numbers. `StandardInferenceRuntime` throws `BackendUnavailableException` rather than returning unprocessed input.
 - Image pipeline: `BaselineImagePipeline` now merges 8-bit luma frames with tile alignment and a motion-robust, noise-aware merge (synthetic-data validated only), but it is luma only and writes grayscale output: there is no colour pipeline, demosaic, tone mapping or HDR rendering yet.
-- Encoding: there is no JPEG/DNG/HEIF encoder. Saved files are unencoded planes (`.raw`).
+- Encoding: pure-Kotlin JPEG and DNG encoders exist (`:neural-isp` `encode/`, validated with libraw, Pillow and ImageIO on synthetic data). The app saves grayscale JPEGs because its pipeline is luma only; a DNG needs RAW frames (Gate 1), and there is no HEIF/Ultra HDR encoder.
 - Reality Guard: a heuristic comparison of reconstructed vs. original luma. It is not hallucination detection and not cryptographic provenance.
 - Zero-copy, IMU sync accuracy, thermal behavior and latency: none measured.
 

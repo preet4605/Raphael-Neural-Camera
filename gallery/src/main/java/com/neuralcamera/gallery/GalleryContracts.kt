@@ -130,8 +130,9 @@ data class SavedMediaItem(
 )
 
 /**
- * Contract for real image encoders. No implementation exists yet; an implementation must emit
- * decodable JPEG / valid DNG, never a header prepended to raw bytes.
+ * Contract for real image encoders. Nothing implements it: the working encoders are `JpegEncoder` and `DngWriter` in
+ * :neural-isp (package `encode`), which take richer inputs (EXIF, CFA, black/white levels, colour matrices) than this
+ * interface can carry. Any implementation must emit decodable JPEG / valid DNG, never a header prepended to raw bytes.
  */
 interface OutputEncoder {
     fun encodeRgbToJpeg(rgbBuffer: ByteArray, width: Int, height: Int, quality: Int = 95): EncodedOutput

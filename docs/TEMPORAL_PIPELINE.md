@@ -17,6 +17,7 @@ This is the classical baseline the neural work will be measured against: no neur
 | Analysis | `FrameAnalysis.kt` | Global noise sigma (median of Immerkaer responses), noise-robust sharpness for choosing the reference |
 | 8-bit luma baseline | `BaselineImagePipeline.kt` | Replaces the old blind per-pixel mean: sharpest frame as reference, stride-aware luma extraction, homoscedastic noise estimated from the reference. Luma only (grayscale output) |
 | Colour baseline | `color/` | Malvar-He-Cutler demosaic (sensor samples pass through unchanged), camera-to-sRGB transform from DNG ForwardMatrix1 or ColorMatrix1 (Bradford to D50) with white-balance-only fallback that is reported as such, hue-preserving highlight shoulder, sRGB encode. No lens shading, local tone mapping, sharpening or gamut mapping |
+| Encoders | `encode/` | `JpegEncoder`: baseline JPEG (grayscale or YCbCr 4:4:4), EXIF orientation/exposure/ISO, pure Kotlin. `DngWriter`: linear uncompressed 16-bit CFA DNG from a merged mosaic; refuses to write without colour calibration and does not write a NoiseProfile (the source's would overstate merged noise) |
 | DNG reading | `dng/` | `TiffFile`/`DngReader` (CFA pattern, black/white levels, NoiseProfile, ActiveArea, AsShotNeutral, EXIF exposure/ISO) and a quick-look `DngPreview` |
 
 Design points that follow the project rules:
@@ -48,7 +49,7 @@ output; an unrelated frame is rejected instead of blended; RAW Bayer merge denoi
 without cross-talk; the result is independent of the thread count.
 
 `tools/burst_merge/` runs the Bayer merge offline on a folder of DNG frames (for example a Gate 1 run's output) and
-writes a linear merged mosaic, previews (including `*_color.png` from the colour baseline) and a report with a global noise estimate before and after. `selftest.sh` checks
+writes a linear merged mosaic (`merged.pgm`, plus `merged.dng` when the source DNGs carry colour calibration), previews (including `*_color.png` and `merged_color.jpg` from the colour baseline) and a report with a global noise estimate before and after. `selftest.sh` checks
 it end to end on a synthetic burst.
 
 ## Known limits
@@ -70,6 +71,6 @@ it end to end on a synthetic burst.
 
 1. Run the Gate 1 recorder on the device and feed its DNGs to `tools/burst_merge`; inspect real results and tune.
 2. Colour pipeline: baseline done (`color/`, synthetic tests only; never compared against real sensor colour). Still missing: lens shading, local tone mapping, highlight/shadow handling, gain-map HDR, real-device colour validation.
-3. Wire real burst capture into the app and encode real JPEG/DNG/HEIF outputs.
+3. Burst capture is wired (YUV) and the app saves real grayscale JPEGs. Still missing: RAW capture feeding the Bayer merge and an on-device DNG save (Gate 1), colour JPEG from the app path, HEIF/Ultra HDR, gain-map HDR.
 4. IMU-aided motion prior and rotation-aware alignment.
 5. Build the 30-scene dataset and the blind A/B protocol (`docs/PROOF_GATES.md`, Gate 3).

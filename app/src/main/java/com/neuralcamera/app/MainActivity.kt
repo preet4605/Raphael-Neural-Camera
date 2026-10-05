@@ -13,6 +13,8 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.neuralcamera.capture.MotionVector
+import com.neuralcamera.isp.encode.JpegEncoder
+import com.neuralcamera.isp.encode.JpegExif
 import com.neuralcamera.ui.CameraUIState
 import com.neuralcamera.ui.NeuralCameraScreen
 import kotlinx.coroutines.CancellationException
@@ -115,14 +117,23 @@ class MainActivity : ComponentActivity() {
             requestNeuralAcceleration = false
         )
 
-        // 4. Save non-destructively. Bytes are unencoded planes, so the files are not labelled as JPG.
+        // 4. Encode and save non-destructively. The baseline pipeline is luma only, so both files are real grayscale
+        // JPEGs (decodable by any viewer), not colour. A DNG needs RAW frames, which this YUV path does not produce.
+        val exif = JpegExif(
+            orientation = when (reference.sensorOrientation) { 90 -> 6; 180 -> 3; 270 -> 8; else -> 1 },
+            exposureTimeSeconds = reference.exposureTimeNs.takeIf { it > 0 }?.let { it / 1e9 },
+            iso = reference.iso.takeIf { it > 0 },
+            software = "Raphael Neural Camera"
+        )
+        val pixelCount = result.outputWidth * result.outputHeight
+        val masterGray = ByteArray(pixelCount) { result.masterRgbPlane[it * 3] }
         app.mediaRepository.saveMediaBundle(
             mediaId = "shot_${System.currentTimeMillis()}",
-            originalBytes = result.originalLumaPlane,
-            masterBytes = result.masterRgbPlane,
-            captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}}""",
-            processingMetadataJson = """{"pipeline": "${result.appliedPipelineName}", "guard": "${result.realityGuardDecision.action}"}""",
-            format = "raw"
+            originalBytes = JpegEncoder.encodeGray(result.originalLumaPlane, result.outputWidth, result.outputHeight, 95, exif),
+            masterBytes = JpegEncoder.encodeGray(masterGray, result.outputWidth, result.outputHeight, 95, exif),
+            captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}}""",
+            processingMetadataJson = """{"pipeline": "${result.appliedPipelineName}", "guard": "${result.realityGuardDecision.action}", "colour": false}""",
+            format = "jpg"
         )
 
         // 5. Update UI telemetry state from measured values

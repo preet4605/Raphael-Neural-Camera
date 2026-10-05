@@ -18,6 +18,7 @@ sourceSets {
                 "com/neuralcamera/isp/temporal/**",
                 "com/neuralcamera/isp/dng/**",
                 "com/neuralcamera/isp/color/**",
+                "com/neuralcamera/isp/encode/**",
                 "com/neuralcamera/benchmarks/Json.kt"
             )
         }
