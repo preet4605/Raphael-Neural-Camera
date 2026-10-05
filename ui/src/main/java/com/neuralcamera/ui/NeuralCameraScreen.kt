@@ -48,14 +48,15 @@ import com.neuralcamera.ui.theme.ViewfinderBlack
 data class CameraUIState(
     val activeMode: CameraShootingMode = CameraShootingMode.AUTO,
     val activeZoomFactor: Float = 1.0f,
-    val isNeuralActive: Boolean = true,
-    val neuralBackendName: String = "QNN HTP NPU",
-    val latencyMs: Long = 28L,
-    val memoryUsageMb: Long = 184L,
-    val thermalStatus: String = "NORMAL",
-    val realityGuardState: String = "PROTECTING (1.00)",
+    val isNeuralActive: Boolean = false,
+    val neuralBackendName: String = "NONE (no backend verified)",
+    val latencyMs: Long? = null,
+    val memoryUsageMb: Long? = null,
+    val thermalStatus: String = "UNKNOWN",
+    val realityGuardState: String = "NOT EVALUATED",
     val showDiagnostics: Boolean = false,
     val isCapturing: Boolean = false,
+    val statusMessage: String? = null,
     val diagnosticsData: CameraDiagnosticsData = CameraDiagnosticsData()
 )
 
@@ -170,6 +171,22 @@ fun NeuralCameraScreen(
                         )
                     }
                 }
+            }
+
+            // Capture / camera error banner
+            state.statusMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = LeicaRed,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 200.dp, start = 16.dp, end = 16.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MatteBlack.copy(alpha = 0.85f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                )
             }
 
             // Mode Selector Carousel & Shutter Bar

@@ -17,6 +17,9 @@ enum class HardwareBackendType {
 }
 
 enum class ModelCompatibilityState {
+    /** No on-device execution evidence exists. Any metric on the descriptor is unmeasured. */
+    UNVERIFIED,
+
     /** Hardware execution verified with real benchmark meeting SLA. */
     VERIFIED,
 

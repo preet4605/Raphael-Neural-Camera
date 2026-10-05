@@ -52,6 +52,12 @@ data class InferenceResult(
     val isFallbackUsed: Boolean = false
 )
 
+/**
+ * Thrown when no real backend executed a request. Callers must never receive an unprocessed
+ * input tensor presented as an inference result.
+ */
+class BackendUnavailableException(message: String) : IllegalStateException(message)
+
 interface InferenceBackend {
     val backendType: HardwareBackendType
     fun isAvailable(): Boolean

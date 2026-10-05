@@ -1,5 +1,15 @@
 package com.neuralcamera.models
 
+/**
+ * Catalog of planned model descriptors. Nothing here is verified: no model artifact exists in this
+ * repository and no model has been executed on any backend.
+ *
+ * - Measured fields (latency, memory, thermal cost) are null until measured on-device.
+ * - `fileSizeBytes` is 0 until an artifact is provisioned; `license` stays UNSPECIFIED until confirmed.
+ * - Every entry stays [ModelCompatibilityState.UNVERIFIED] until a run with in-process backend
+ *   attribution promotes it.
+ * - Formats, resolutions, precision and backend lists are design intent, not evidence.
+ */
 object PredefinedModelCatalog {
 
     val CLASSICAL_BASELINE_ISP = ModelDescriptor(
@@ -7,7 +17,7 @@ object PredefinedModelCatalog {
         name = "Classical Production ISP Baseline",
         purpose = SemanticPurpose.NEURAL_ISP,
         version = ModelVersion(1, 0, 0),
-        license = "Apache-2.0",
+        license = "UNSPECIFIED",
         fileSizeBytes = 0L,
         inputFormat = "RAW_SENSOR/YUV_420_888",
         outputFormat = "RGBA_8888/JPEG",
@@ -15,13 +25,13 @@ object PredefinedModelCatalog {
         outputResolution = Pair(4096, 3072),
         tensorPrecision = TensorPrecision.FP32,
         supportedBackends = listOf(HardwareBackendType.XNNPACK_CPU),
-        memoryRequirementBytes = 32 * 1024 * 1024L, // 32MB
-        expectedLatencyMs = 28L,
-        thermalCostScore = 0.1f,
+        memoryRequirementBytes = null,
+        expectedLatencyMs = null,
+        thermalCostScore = null,
         compatibilityRequirements = listOf("Android 11+"),
         fallbackModelId = null,
         isClassicalFallback = true,
-        compatibilityState = ModelCompatibilityState.VERIFIED
+        compatibilityState = ModelCompatibilityState.UNVERIFIED
     )
 
     val NEURAL_ISP_LITE = ModelDescriptor(
@@ -29,8 +39,8 @@ object PredefinedModelCatalog {
         name = "Neural ISP Lite (HDR & Temporal Denoise)",
         purpose = SemanticPurpose.NEURAL_ISP,
         version = ModelVersion(1, 1, 0),
-        license = "Apache-2.0",
-        fileSizeBytes = 14 * 1024 * 1024L, // 14MB
+        license = "UNSPECIFIED",
+        fileSizeBytes = 0L,
         inputFormat = "RAW10/RAW12/YUV_420_888",
         outputFormat = "RGBA_8888",
         inputResolution = Pair(1920, 1440),
@@ -41,13 +51,13 @@ object PredefinedModelCatalog {
             HardwareBackendType.VULKAN_GPU,
             HardwareBackendType.XNNPACK_CPU
         ),
-        memoryRequirementBytes = 96 * 1024 * 1024L, // 96MB
-        expectedLatencyMs = 42L,
-        thermalCostScore = 0.35f,
-        compatibilityRequirements = listOf("Qualcomm HTP or Vulkan 1.3"),
+        memoryRequirementBytes = null,
+        expectedLatencyMs = null,
+        thermalCostScore = null,
+        compatibilityRequirements = emptyList(),
         fallbackModelId = CLASSICAL_BASELINE_ISP.modelId,
         isClassicalFallback = false,
-        compatibilityState = ModelCompatibilityState.AVAILABLE
+        compatibilityState = ModelCompatibilityState.UNVERIFIED
     )
 
     val PERCEPTION_SCENE_ALIGNMENT = ModelDescriptor(
@@ -55,8 +65,8 @@ object PredefinedModelCatalog {
         name = "Perception Fast Optical Alignment",
         purpose = SemanticPurpose.TEMPORAL_RECONSTRUCTION,
         version = ModelVersion(1, 0, 2),
-        license = "Apache-2.0",
-        fileSizeBytes = 6 * 1024 * 1024L, // 6MB
+        license = "UNSPECIFIED",
+        fileSizeBytes = 0L,
         inputFormat = "YUV_420_888_LUMA",
         outputFormat = "FLOW_VECTORS_FLOAT",
         inputResolution = Pair(512, 384),
@@ -67,22 +77,23 @@ object PredefinedModelCatalog {
             HardwareBackendType.VULKAN_GPU,
             HardwareBackendType.XNNPACK_CPU
         ),
-        memoryRequirementBytes = 32 * 1024 * 1024L,
-        expectedLatencyMs = 12L,
-        thermalCostScore = 0.15f,
-        compatibilityRequirements = listOf("All modern Android devices"),
+        memoryRequirementBytes = null,
+        expectedLatencyMs = null,
+        thermalCostScore = null,
+        compatibilityRequirements = emptyList(),
         fallbackModelId = null,
         isClassicalFallback = false,
-        compatibilityState = ModelCompatibilityState.AVAILABLE
+        compatibilityState = ModelCompatibilityState.UNVERIFIED
     )
 
+    /** Intended orchestrator role only; model details are unverified. Outside the pixel hot path. */
     val OMNI_NEURAL_4B_MOBILE = ModelDescriptor(
         modelId = "omnineural-4b-mobile-v1",
         name = "OmniNeural 4B Mobile Semantic Director",
         purpose = SemanticPurpose.SEMANTIC_DIRECTOR,
         version = ModelVersion(1, 0, 0),
-        license = "Open RAIL-M",
-        fileSizeBytes = 2_200_000_000L, // 2.2GB INT4
+        license = "UNSPECIFIED",
+        fileSizeBytes = 0L,
         inputFormat = "TOKEN_STREAM/IMAGE_EMBEDDING",
         outputFormat = "STRUCTURED_INTENT_JSON",
         inputResolution = Pair(384, 384),
@@ -92,22 +103,23 @@ object PredefinedModelCatalog {
             HardwareBackendType.QUALCOMM_QNN_NPU,
             HardwareBackendType.VULKAN_GPU
         ),
-        memoryRequirementBytes = 2_600_000_000L, // ~2.6GB RAM
-        expectedLatencyMs = 350L,
-        thermalCostScore = 0.85f,
-        compatibilityRequirements = listOf("Minimum 12GB device RAM", "Qualcomm Snapdragon 8 Gen 3/Elite"),
+        memoryRequirementBytes = null,
+        expectedLatencyMs = null,
+        thermalCostScore = null,
+        compatibilityRequirements = listOf("Not in camera hot path"),
         fallbackModelId = null,
         isClassicalFallback = false,
-        compatibilityState = ModelCompatibilityState.AVAILABLE
+        compatibilityState = ModelCompatibilityState.UNVERIFIED
     )
 
+    /** AI Studio only; runtime integration is not implemented or verified. */
     val FLUX_KLEIN_4B_STUDIO = ModelDescriptor(
         modelId = "flux-klein-4b-studio-v1",
         name = "FLUX.2 Klein 4B Generative Studio",
         purpose = SemanticPurpose.GENERATIVE,
         version = ModelVersion(1, 0, 0),
-        license = "Custom Research / Studio",
-        fileSizeBytes = 2_400_000_000L,
+        license = "UNSPECIFIED",
+        fileSizeBytes = 0L,
         inputFormat = "LATENT_TENSOR_RGB",
         outputFormat = "RGB_IMAGE_1024",
         inputResolution = Pair(512, 512),
@@ -117,12 +129,12 @@ object PredefinedModelCatalog {
             HardwareBackendType.QUALCOMM_QNN_NPU,
             HardwareBackendType.VULKAN_GPU
         ),
-        memoryRequirementBytes = 3_200_000_000L,
-        expectedLatencyMs = 2800L,
-        thermalCostScore = 0.95f,
+        memoryRequirementBytes = null,
+        expectedLatencyMs = null,
+        thermalCostScore = null,
         compatibilityRequirements = listOf("AI Studio mode only", "Not in camera hot path"),
         fallbackModelId = null,
         isClassicalFallback = false,
-        compatibilityState = ModelCompatibilityState.AVAILABLE
+        compatibilityState = ModelCompatibilityState.UNVERIFIED
     )
 }

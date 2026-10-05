@@ -66,31 +66,3 @@ class OriginalMasterMediaRepository(
         return true
     }
 }
-
-class StandardOutputEncoder : OutputEncoder {
-
-    override fun encodeRgbToJpeg(rgbBuffer: ByteArray, width: Int, height: Int, quality: Int): EncodedOutput {
-        // High quality simulated JPEG container with magic header for unit testing/mock
-        val header = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte())
-        val output = header + rgbBuffer
-        return EncodedOutput(
-            format = "JPEG",
-            data = output,
-            width = width,
-            height = height,
-            isMaster = true
-        )
-    }
-
-    override fun encodeRawToDng(rawBuffer: ByteArray, width: Int, height: Int): EncodedOutput {
-        val header = byteArrayOf(0x49, 0x49, 0x2A, 0x00) // TIFF header
-        val output = header + rawBuffer
-        return EncodedOutput(
-            format = "DNG",
-            data = output,
-            width = width,
-            height = height,
-            isMaster = false
-        )
-    }
-}

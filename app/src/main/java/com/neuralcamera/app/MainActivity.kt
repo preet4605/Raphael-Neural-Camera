@@ -9,31 +9,28 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.neuralcamera.cameracore.CameraFrame
-import com.neuralcamera.cameracore.FrameMetadata
-import com.neuralcamera.cameracore.FramePlane
-import com.neuralcamera.capture.CameraShootingMode
 import com.neuralcamera.capture.MotionVector
-import com.neuralcamera.deviceprofiles.LensFacing
 import com.neuralcamera.ui.CameraUIState
 import com.neuralcamera.ui.NeuralCameraScreen
-import com.neuralcamera.ui.components.CameraDiagnosticsData
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var app: NeuralCameraApplication
     private var activePreviewSurface: Surface? = null
+    private var uiState by mutableStateOf(CameraUIState())
 
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
             startCameraPreviewIfReady()
+        } else {
+            uiState = uiState.copy(statusMessage = "Camera permission denied.")
         }
     }
 
@@ -47,23 +44,6 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            var uiState by remember {
-                mutableStateOf(
-                    CameraUIState(
-                        activeMode = CameraShootingMode.AUTO,
-                        activeZoomFactor = 1.0f,
-                        isNeuralActive = true,
-                        neuralBackendName = "QNN HTP NPU (Qualcomm)",
-                        latencyMs = 28L,
-                        memoryUsageMb = 184L,
-                        thermalStatus = "NORMAL",
-                        realityGuardState = "PROTECTING (1.00)",
-                        showDiagnostics = false,
-                        diagnosticsData = CameraDiagnosticsData()
-                    )
-                )
-            }
-
             NeuralCameraScreen(
                 state = uiState,
                 onModeSelected = { selectedMode ->
@@ -86,81 +66,16 @@ class MainActivity : ComponentActivity() {
                 },
                 onShutterPressed = {
                     lifecycleScope.launch {
-                        uiState = uiState.copy(isCapturing = true)
-
-                        // 1. Plan capture using UniversalCapturePlanner
-                        val plan = app.capturePlanner.planCapture(
-                            mode = uiState.activeMode,
-                            sceneLuminanceLux = 120f,
-                            motion = MotionVector(0.01f, 0.01f, 0.01f, true),
-                            deviceProfile = app.deviceProfileRepository.getActiveProfile()
-                        )
-
-                        // 2. Acquire real hardware frames if camera is active, or fallback safely
-                        val realFrames = try {
-                            app.cameraController.triggerBurstCapture(plan.temporalFrameCount)
+                        uiState = uiState.copy(isCapturing = true, statusMessage = null)
+                        try {
+                            captureAndSave()
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
-                            emptyList()
+                            uiState = uiState.copy(statusMessage = e.message ?: e.javaClass.simpleName)
+                        } finally {
+                            uiState = uiState.copy(isCapturing = false)
                         }
-
-                        val framesToProcess = if (realFrames.isNotEmpty()) {
-                            realFrames
-                        } else {
-                            // Safe fallback frames for mock or unprivileged test environments
-                            (1..plan.temporalFrameCount).map { seq ->
-                                CameraFrame(
-                                    frameId = "shot_${System.currentTimeMillis()}_$seq",
-                                    format = if (plan.useRawStream) "RAW_SENSOR" else "YUV_420_888",
-                                    width = 1920,
-                                    height = 1080,
-                                    planes = listOf(FramePlane(ByteArray(1920 * 1080) { 128.toByte() }, 1, 1920)),
-                                    metadata = FrameMetadata(
-                                        frameSequence = seq.toLong(),
-                                        timestampNs = System.nanoTime(),
-                                        exposureTimeNs = plan.exposureTimeNs,
-                                        iso = plan.iso,
-                                        focalLengthMm = 5.59f,
-                                        focusDistanceMeters = 1.5f,
-                                        apertureFNumber = 1.6f,
-                                        lensFacing = LensFacing.BACK_WIDE,
-                                        physicalCameraId = plan.targetCameraId,
-                                        sensorOrientation = 90
-                                    )
-                                )
-                            }
-                        }
-
-                        // 3. Process frames through baseline pipeline
-                        val result = app.imagePipeline.processFrames(
-                            frames = framesToProcess,
-                            targetWidth = 1920,
-                            targetHeight = 1080,
-                            requestNeuralAcceleration = true
-                        )
-
-                        // 4. Save non-destructively
-                        app.mediaRepository.saveMediaBundle(
-                            mediaId = "shot_${System.currentTimeMillis()}",
-                            originalBytes = result.originalLumaPlane,
-                            masterBytes = result.masterRgbPlane,
-                            captureMetadataJson = """{"iso": ${plan.iso}, "exposure_ns": ${plan.exposureTimeNs}}""",
-                            processingMetadataJson = """{"pipeline": "${result.appliedPipelineName}", "guard": "${result.realityGuardDecision.action}"}""",
-                            format = "JPG"
-                        )
-
-                        // 5. Update UI telemetry state
-                        val updatedDiag = uiState.diagnosticsData.copy(
-                            iso = plan.iso,
-                            exposureTimeNs = plan.exposureTimeNs,
-                            frameNumber = uiState.diagnosticsData.frameNumber + plan.temporalFrameCount
-                        )
-
-                        uiState = uiState.copy(
-                            isCapturing = false,
-                            latencyMs = result.metrics.latencyMs,
-                            realityGuardState = "${result.realityGuardDecision.action} (${String.format("%.2f", result.realityGuardDecision.blendRatio)})",
-                            diagnosticsData = updatedDiag
-                        )
                     }
                 },
                 onToggleDiagnostics = {
@@ -168,6 +83,55 @@ class MainActivity : ComponentActivity() {
                 }
             )
         }
+    }
+
+    /**
+     * Plans, captures, processes and saves one burst. Only frames returned by the camera are ever
+     * processed: when capture yields nothing this throws and nothing is saved.
+     */
+    private suspend fun captureAndSave() {
+        // 1. Plan capture using UniversalCapturePlanner
+        val plan = app.capturePlanner.planCapture(
+            mode = uiState.activeMode,
+            sceneLuminanceLux = 120f,
+            motion = MotionVector(0.01f, 0.01f, 0.01f, true),
+            deviceProfile = app.deviceProfileRepository.getActiveProfile()
+        )
+
+        // 2. Acquire real hardware frames
+        val frames = app.cameraController.triggerBurstCapture(plan.temporalFrameCount)
+        check(frames.isNotEmpty()) { "Capture returned no frames; nothing was saved." }
+        val reference = frames.last().metadata
+
+        // 3. Process frames through baseline pipeline (classical only; no neural backend is verified)
+        val result = app.imagePipeline.processFrames(
+            frames = frames,
+            targetWidth = 1920,
+            targetHeight = 1080,
+            requestNeuralAcceleration = false
+        )
+
+        // 4. Save non-destructively. Bytes are unencoded planes, so the files are not labelled as JPG.
+        app.mediaRepository.saveMediaBundle(
+            mediaId = "shot_${System.currentTimeMillis()}",
+            originalBytes = result.originalLumaPlane,
+            masterBytes = result.masterRgbPlane,
+            captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}}""",
+            processingMetadataJson = """{"pipeline": "${result.appliedPipelineName}", "guard": "${result.realityGuardDecision.action}"}""",
+            format = "raw"
+        )
+
+        // 5. Update UI telemetry state from measured values
+        uiState = uiState.copy(
+            latencyMs = result.metrics.latencyMs,
+            realityGuardState = "${result.realityGuardDecision.action} (${String.format("%.2f", result.realityGuardDecision.blendRatio)})",
+            diagnosticsData = uiState.diagnosticsData.copy(
+                iso = reference.iso,
+                exposureTimeNs = reference.exposureTimeNs,
+                frameNumber = reference.frameSequence,
+                timestampNs = reference.timestampNs
+            )
+        )
     }
 
     private fun startCameraPreviewIfReady() {
@@ -178,13 +142,17 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             try {
-                val opened = app.cameraController.openCamera("0")
-                if (opened) {
-                    app.cameraController.configureSession(surface)
-                    app.cameraController.startRepeatingPreview()
+                val error = when {
+                    !app.cameraController.openCamera("0") -> "Camera failed to open."
+                    !app.cameraController.configureSession(surface) -> "Camera session configuration failed."
+                    !app.cameraController.startRepeatingPreview() -> "Preview failed to start."
+                    else -> null
                 }
+                uiState = uiState.copy(statusMessage = error)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                // Safe handle camera open failure
+                uiState = uiState.copy(statusMessage = "Camera error: ${e.message ?: e.javaClass.simpleName}")
             }
         }
     }

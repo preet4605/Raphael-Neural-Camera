@@ -56,4 +56,18 @@ class ModelManifestValidationTest {
         assertTrue(result.issues.any { it.contains("license") })
         assertTrue(result.issues.any { it.contains("supportedBackends") })
     }
+
+    @Test
+    fun testVerifiedModelRequiresArtifactAndMeasuredMetrics() {
+        val unmeasuredButClaimedVerified = PredefinedModelCatalog.NEURAL_ISP_LITE.copy(
+            compatibilityState = ModelCompatibilityState.VERIFIED
+        )
+
+        val result = ModelManifestValidator.validate(unmeasuredButClaimedVerified)
+
+        assertTrue(!result.isValid)
+        assertTrue(result.issues.any { it.contains("artifact") })
+        assertTrue(result.issues.any { it.contains("memoryRequirement") })
+        assertTrue(result.issues.any { it.contains("latencyExpectation") })
+    }
 }

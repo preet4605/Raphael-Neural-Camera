@@ -136,7 +136,7 @@ object RuntimeProfileExporter {
             appendLine("{")
             appendLine("  \"phase\": 1,")
             appendLine("  \"timestamp\": ${verification.timestamp},")
-            appendLine("  \"status\": \"VERIFIED\",")
+            appendLine("  \"status\": \"UNVERIFIED\",") // a discovery export is not verification evidence
             appendLine("  \"device\": \"${verification.deviceModel}\",")
             appendLine("  \"zeroCopyDesign\": \"PASS\",")
             appendLine("  \"zeroCopyHardware\": \"${verification.zeroCopyHardwareState}\",")
