@@ -18,6 +18,8 @@ import com.neuralcamera.isp.encode.JpegExif
 import com.neuralcamera.ui.CameraUIState
 import com.neuralcamera.ui.NeuralCameraScreen
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -49,12 +51,30 @@ class MainActivity : ComponentActivity() {
             NeuralCameraScreen(
                 state = uiState,
                 onModeSelected = { selectedMode ->
-                    uiState = uiState.copy(activeMode = selectedMode)
-                    app.telemetryLogger.logEvent("MODE_CHANGED", mapOf("mode" to selectedMode.name))
+                    val frames = planFor(selectedMode).temporalFrameCount
+                    uiState = uiState.copy(
+                        activeMode = selectedMode,
+                        statusMessage = null,
+                        infoMessage = "${selectedMode.name}: $frames frame${if (frames == 1) "" else "s"} per shot " +
+                            "(a mode currently only sets the burst length; exposure stays on camera auto)"
+                    )
+                    app.telemetryLogger.logEvent("MODE_CHANGED", mapOf("mode" to selectedMode.name, "frames" to frames))
                 },
                 onZoomSelected = { zoom ->
-                    uiState = uiState.copy(activeZoomFactor = zoom)
-                    app.telemetryLogger.logEvent("ZOOM_CHANGED", mapOf("zoom" to zoom))
+                    lifecycleScope.launch {
+                        val applied = app.cameraController.applyZoom(zoom)
+                        val range = app.cameraController.supportedZoomRange()
+                        uiState = if (applied != null) {
+                            uiState.copy(activeZoomFactor = zoom, supportedZoom = range, statusMessage = null, infoMessage = "Zoom ${"%.1f".format(applied)}x")
+                        } else {
+                            uiState.copy(
+                                supportedZoom = range,
+                                infoMessage = "${"%.1f".format(zoom)}x is not supported by this camera" +
+                                    (range?.let { " (range ${"%.1f".format(it.start)}x to ${"%.1f".format(it.endInclusive)}x)" } ?: "")
+                            )
+                        }
+                        app.telemetryLogger.logEvent("ZOOM_CHANGED", mapOf("requested" to zoom, "applied" to (applied ?: -1f)))
+                    }
                 },
                 onSurfaceAvailable = { surface ->
                     activePreviewSurface = surface
@@ -68,9 +88,10 @@ class MainActivity : ComponentActivity() {
                 },
                 onShutterPressed = {
                     lifecycleScope.launch {
-                        uiState = uiState.copy(isCapturing = true, statusMessage = null)
+                        uiState = uiState.copy(isCapturing = true, statusMessage = null, infoMessage = "Capturing...")
                         try {
-                            captureAndSave()
+                            val summary = captureAndSave()
+                            uiState = uiState.copy(infoMessage = summary)
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -91,14 +112,36 @@ class MainActivity : ComponentActivity() {
      * Plans, captures, processes and saves one burst. Only frames returned by the camera are ever
      * processed: when capture yields nothing this throws and nothing is saved.
      */
-    private suspend fun captureAndSave() {
+    private fun planFor(mode: com.neuralcamera.capture.CameraShootingMode) = app.capturePlanner.planCapture(
+        mode = mode,
+        sceneLuminanceLux = 120f, // fixed placeholder: no light sensor reading is wired yet
+        motion = MotionVector(0.01f, 0.01f, 0.01f, true), // fixed placeholder: no motion estimate is wired yet
+        deviceProfile = app.deviceProfileRepository.getActiveProfile()
+    )
+
+    /** Inserts a JPEG into the system gallery (Pictures/Raphael); no storage permission is needed on API 30+. */
+    private fun saveToGallery(name: String, jpeg: ByteArray): String? = try {
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "$name.jpg")
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Raphael")
+            put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val uri = contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        if (uri == null) null else {
+            contentResolver.openOutputStream(uri)?.use { it.write(jpeg) }
+            values.clear(); values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
+            contentResolver.update(uri, values, null, null)
+            "Pictures/Raphael/$name.jpg"
+        }
+    } catch (e: Exception) {
+        null
+    }
+
+    private suspend fun captureAndSave(): String {
+        val started = System.currentTimeMillis()
         // 1. Plan capture using UniversalCapturePlanner
-        val plan = app.capturePlanner.planCapture(
-            mode = uiState.activeMode,
-            sceneLuminanceLux = 120f,
-            motion = MotionVector(0.01f, 0.01f, 0.01f, true),
-            deviceProfile = app.deviceProfileRepository.getActiveProfile()
-        )
+        val plan = planFor(uiState.activeMode)
 
         // 2. Acquire real hardware frames
         val frames = app.cameraController.triggerBurstCapture(plan.temporalFrameCount)
@@ -110,12 +153,15 @@ class MainActivity : ComponentActivity() {
         val reference = frames.last().metadata
 
         // 3. Process frames through baseline pipeline (classical only; no neural backend is verified)
-        val result = app.imagePipeline.processFrames(
-            frames = frames,
-            targetWidth = frames.first().width,
-            targetHeight = frames.first().height,
-            requestNeuralAcceleration = false
-        )
+        // Merge and encoding are CPU heavy: keep them off the main thread so the UI stays responsive.
+        val result = withContext(Dispatchers.Default) {
+            app.imagePipeline.processFrames(
+                frames = frames,
+                targetWidth = frames.first().width,
+                targetHeight = frames.first().height,
+                requestNeuralAcceleration = false
+            )
+        }
 
         // 4. Encode and save non-destructively. The master is a colour JPEG when the frames had chroma planes (luma is
         // merged, chroma comes from the reference frame), else grayscale; the original is the reference luma. A DNG
@@ -127,15 +173,25 @@ class MainActivity : ComponentActivity() {
             software = "Raphael Neural Camera"
         )
         val pixelCount = result.outputWidth * result.outputHeight
-        app.mediaRepository.saveMediaBundle(
-            mediaId = "shot_${System.currentTimeMillis()}",
-            originalBytes = JpegEncoder.encodeGray(result.originalLumaPlane, result.outputWidth, result.outputHeight, 95, exif),
-            masterBytes = if (result.isColour) JpegEncoder.encodeRgb(result.masterRgbPlane, result.outputWidth, result.outputHeight, 95, exif)
-                else JpegEncoder.encodeGray(ByteArray(pixelCount) { result.masterRgbPlane[it * 3] }, result.outputWidth, result.outputHeight, 95, exif),
-            captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}}""",
-            processingMetadataJson = """{"pipeline": "${result.appliedPipelineName}", "guard": "${result.realityGuardDecision.action}", "colour": ${result.isColour}}""",
-            format = "jpg"
-        )
+        val mediaId = "shot_${System.currentTimeMillis()}"
+        val master = withContext(Dispatchers.Default) {
+            if (result.isColour) JpegEncoder.encodeRgb(result.masterRgbPlane, result.outputWidth, result.outputHeight, 95, exif)
+            else JpegEncoder.encodeGray(ByteArray(pixelCount) { result.masterRgbPlane[it * 3] }, result.outputWidth, result.outputHeight, 95, exif)
+        }
+        val original = withContext(Dispatchers.Default) {
+            JpegEncoder.encodeGray(result.originalLumaPlane, result.outputWidth, result.outputHeight, 95, exif)
+        }
+        withContext(Dispatchers.IO) {
+            app.mediaRepository.saveMediaBundle(
+                mediaId = mediaId,
+                originalBytes = original,
+                masterBytes = master,
+                captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}}""",
+                processingMetadataJson = """{"pipeline": "${result.appliedPipelineName}", "guard": "${result.realityGuardDecision.action}", "colour": ${result.isColour}}""",
+                format = "jpg"
+            )
+        }
+        val galleryPath = withContext(Dispatchers.IO) { saveToGallery(mediaId, master) }
 
         // 5. Update UI telemetry state from measured values
         uiState = uiState.copy(
@@ -148,6 +204,9 @@ class MainActivity : ComponentActivity() {
                 timestampNs = reference.timestampNs
             )
         )
+        val seconds = (System.currentTimeMillis() - started) / 1000.0
+        return "Saved ${frames.size}-frame ${if (result.isColour) "colour" else "gray"} ${result.outputWidth}x${result.outputHeight} JPEG " +
+            "in ${"%.1f".format(seconds)} s" + (galleryPath?.let { " -> $it" } ?: " (gallery save failed; copy is in app storage)")
     }
 
     private fun startCameraPreviewIfReady() {
@@ -164,7 +223,7 @@ class MainActivity : ComponentActivity() {
                     !app.cameraController.startRepeatingPreview() -> "Preview failed to start."
                     else -> null
                 }
-                uiState = uiState.copy(statusMessage = error)
+                uiState = uiState.copy(statusMessage = error, supportedZoom = if (error == null) app.cameraController.supportedZoomRange() else null)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

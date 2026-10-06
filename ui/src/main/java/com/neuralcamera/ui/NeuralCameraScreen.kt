@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -57,6 +58,10 @@ data class CameraUIState(
     val showDiagnostics: Boolean = false,
     val isCapturing: Boolean = false,
     val statusMessage: String? = null,
+    /** Neutral feedback (capture saved, mode/zoom changed); shown in white, errors in red. */
+    val infoMessage: String? = null,
+    /** Zoom ratios the active camera accepts; buttons outside it are dimmed. Null = not known yet. */
+    val supportedZoom: ClosedFloatingPointRange<Float>? = null,
     val diagnosticsData: CameraDiagnosticsData = CameraDiagnosticsData()
 )
 
@@ -144,7 +149,7 @@ fun NeuralCameraScreen(
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 148.dp)
+                    .padding(bottom = 182.dp)
                     .clip(RoundedCornerShape(20.dp))
                     .background(DarkGunmetal.copy(alpha = 0.75f))
                     .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -154,11 +159,13 @@ fun NeuralCameraScreen(
                 val lenses = listOf(0.6f, 1.0f, 2.0f, 3.0f, 6.0f)
                 for (zoom in lenses) {
                     val isSelected = (state.activeZoomFactor == zoom)
+                    val supported = state.supportedZoom?.let { zoom >= it.start - 1e-3f && zoom <= it.endInclusive + 1e-3f } ?: true
                     Box(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
                             .background(if (isSelected) PrecisionAmber else Color.Transparent)
+                            .alpha(if (supported) 1f else 0.35f)
                             .clickable { onZoomSelected(zoom) },
                         contentAlignment = Alignment.Center
                     ) {
@@ -182,7 +189,22 @@ fun NeuralCameraScreen(
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 200.dp, start = 16.dp, end = 16.dp)
+                        .padding(bottom = 246.dp, start = 16.dp, end = 16.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MatteBlack.copy(alpha = 0.85f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
+
+            state.infoMessage?.takeIf { state.statusMessage == null }?.let { message ->
+                Text(
+                    text = message,
+                    color = StudioWhite,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 246.dp, start = 16.dp, end = 16.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(MatteBlack.copy(alpha = 0.85f))
                         .padding(horizontal = 10.dp, vertical = 6.dp)
@@ -248,14 +270,14 @@ fun NeuralCameraScreen(
                             .clip(CircleShape)
                             .border(3.5.dp, StudioWhite, CircleShape)
                             .padding(6.dp)
-                            .clickable { onShutterPressed() },
+                            .clickable(enabled = !state.isCapturing) { onShutterPressed() },
                         contentAlignment = Alignment.Center
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .clip(CircleShape)
-                                .background(if (state.activeMode == CameraShootingMode.MASTER) LeicaRed else StudioWhite)
+                                .background(if (state.isCapturing) PrecisionAmber else if (state.activeMode == CameraShootingMode.MASTER) LeicaRed else StudioWhite)
                         )
                     }
 

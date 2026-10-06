@@ -58,6 +58,27 @@ class RealCamera2Controller(
     @Volatile private var activeCollector: BurstCollector<CopiedYuv, TotalCaptureResult>? = null
     private var analysisImageReader: ImageReaderManager? = null
 
+    @Volatile private var zoomRatio = 1.0f
+
+    /** Zoom range the active camera accepts, or null when the camera is closed or has no zoom-ratio control. */
+    fun supportedZoomRange(): ClosedFloatingPointRange<Float>? {
+        val id = activeCameraId ?: return null
+        val r = cameraManager.getCameraCharacteristics(id).get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE) ?: return null
+        return r.lower..r.upper
+    }
+
+    /**
+     * Applies [ratio] to the preview and to later bursts. Returns the ratio now in effect, or null when the camera does
+     * not support that ratio (nothing changes then). Optical lens switching happens inside a logical multi-camera.
+     */
+    suspend fun applyZoom(ratio: Float): Float? = mutex.withLock {
+        val range = supportedZoomRange() ?: return null
+        if (ratio < range.start - 1e-3f || ratio > range.endInclusive + 1e-3f) return null
+        zoomRatio = ratio.coerceIn(range.start, range.endInclusive)
+        resumePreviewLocked()
+        zoomRatio
+    }
+
     val associator = CaptureResultAssociator()
     val frameRepository = BoundedRingFrameRepository()
 
@@ -228,6 +249,7 @@ class RealCamera2Controller(
                 set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
                 set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
                 set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+                set(CaptureRequest.CONTROL_ZOOM_RATIO, zoomRatio)
             }
 
             session.setRepeatingRequest(requestBuilder.build(), object : CameraCaptureSession.CaptureCallback() {
@@ -289,6 +311,7 @@ class RealCamera2Controller(
                     set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
                     set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
                     set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+                    set(CaptureRequest.CONTROL_ZOOM_RATIO, zoomRatio)
                 }.build()
             }
             session.captureBurst(requests, object : CameraCaptureSession.CaptureCallback() {
@@ -341,6 +364,7 @@ class RealCamera2Controller(
                 set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
                 set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
                 set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+                set(CaptureRequest.CONTROL_ZOOM_RATIO, zoomRatio)
             }
             session.setRepeatingRequest(builder.build(), null, cameraHandler)
         } catch (e: Exception) {
@@ -403,8 +427,8 @@ class RealCamera2Controller(
     }
 
     private companion object {
-        /** Largest burst frame size; the merge cost and the copy budget both grow with it. */
-        const val BURST_MAX_PIXELS = 8_500_000L
+        /** Largest burst frame size; merge time grows with it (roughly 0.5 s per megapixel per frame on a host JVM). */
+        const val BURST_MAX_PIXELS = 4_200_000L
         const val BURST_READER_SLOTS = 4
         /** Heap held by the copied frames of one burst. */
         const val BURST_COPY_BUDGET_BYTES = 100L * 1024 * 1024
