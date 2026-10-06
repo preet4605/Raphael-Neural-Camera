@@ -88,18 +88,27 @@ class BaselineImagePipeline(
                 GuardAction.KEEP_RECONSTRUCTED, GuardAction.DISCARD_NEURAL_STAGE -> reconstructedLuma
             }
 
-            // Convert to RGB master buffer
+            // Convert to RGB master buffer. Luma is the merged result; colour comes from the reference frame's own
+            // chroma planes when the frame has them (chroma is NOT temporally merged), otherwise the output is gray.
+            val chroma = ChromaExtractor.toFullRes(refFrame)
             val masterRgb = ByteArray(pixelCount * 3)
             for (i in 0 until pixelCount) {
                 val luma = finalLuma[i].toInt() and 0xFF
-                // S-curve subtle contrast enhancement (classical photographic tone curve)
+                // S-curve subtle contrast enhancement (classical photographic tone curve), applied to luma only
                 val normalized = luma / 255.0
-                val curved = (normalized * normalized * (3 - 2 * normalized) * 255.0).toInt().coerceIn(0, 255).toByte()
-
+                val y = normalized * normalized * (3 - 2 * normalized) * 255.0
                 val rgbIdx = i * 3
-                masterRgb[rgbIdx] = curved     // R
-                masterRgb[rgbIdx + 1] = curved // G
-                masterRgb[rgbIdx + 2] = curved // B
+                if (chroma == null) {
+                    val g = y.toInt().coerceIn(0, 255).toByte()
+                    masterRgb[rgbIdx] = g; masterRgb[rgbIdx + 1] = g; masterRgb[rgbIdx + 2] = g
+                } else {
+                    // BT.601 full-range YCbCr, the JFIF convention Camera2 YUV_420_888 uses.
+                    val cb = (chroma.cb[i].toInt() and 0xFF) - 128.0
+                    val cr = (chroma.cr[i].toInt() and 0xFF) - 128.0
+                    masterRgb[rgbIdx] = Math.round(y + 1.402 * cr).toInt().coerceIn(0, 255).toByte()
+                    masterRgb[rgbIdx + 1] = Math.round(y - 0.344136 * cb - 0.714136 * cr).toInt().coerceIn(0, 255).toByte()
+                    masterRgb[rgbIdx + 2] = Math.round(y + 1.772 * cb).toInt().coerceIn(0, 255).toByte()
+                }
             }
 
             // 5. Quality Evaluation
@@ -122,8 +131,9 @@ class BaselineImagePipeline(
                     isSuccess = true
                 ),
                 isNeuralAccelerated = false,
+                isColour = chroma != null,
                 temporalStats = merge.frameStats,
-                appliedPipelineName = "Classical baseline ISP (tile-aligned, noise-aware, motion-robust temporal merge; luma only)"
+                appliedPipelineName = "Classical baseline ISP (tile-aligned, noise-aware, motion-robust temporal merge on luma; chroma from the reference frame)"
             )
         }
 

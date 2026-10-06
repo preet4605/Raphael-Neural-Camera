@@ -18,6 +18,8 @@ data class ProcessedImageResult(
     val metrics: ExecutionMetrics,
     val isNeuralAccelerated: Boolean,
     val appliedPipelineName: String,
+    /** True when [masterRgbPlane] carries real colour (from the frame's chroma planes); false means R=G=B gray. */
+    val isColour: Boolean = false,
     /** Per alternate frame: how much of it the temporal merge used (input for the quality engine). */
     val temporalStats: List<FrameMergeStats> = emptyList()
 ) {

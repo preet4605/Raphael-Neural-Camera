@@ -117,8 +117,9 @@ class MainActivity : ComponentActivity() {
             requestNeuralAcceleration = false
         )
 
-        // 4. Encode and save non-destructively. The baseline pipeline is luma only, so both files are real grayscale
-        // JPEGs (decodable by any viewer), not colour. A DNG needs RAW frames, which this YUV path does not produce.
+        // 4. Encode and save non-destructively. The master is a colour JPEG when the frames had chroma planes (luma is
+        // merged, chroma comes from the reference frame), else grayscale; the original is the reference luma. A DNG
+        // needs RAW frames, which this YUV path does not produce.
         val exif = JpegExif(
             orientation = when (reference.sensorOrientation) { 90 -> 6; 180 -> 3; 270 -> 8; else -> 1 },
             exposureTimeSeconds = reference.exposureTimeNs.takeIf { it > 0 }?.let { it / 1e9 },
@@ -126,13 +127,13 @@ class MainActivity : ComponentActivity() {
             software = "Raphael Neural Camera"
         )
         val pixelCount = result.outputWidth * result.outputHeight
-        val masterGray = ByteArray(pixelCount) { result.masterRgbPlane[it * 3] }
         app.mediaRepository.saveMediaBundle(
             mediaId = "shot_${System.currentTimeMillis()}",
             originalBytes = JpegEncoder.encodeGray(result.originalLumaPlane, result.outputWidth, result.outputHeight, 95, exif),
-            masterBytes = JpegEncoder.encodeGray(masterGray, result.outputWidth, result.outputHeight, 95, exif),
+            masterBytes = if (result.isColour) JpegEncoder.encodeRgb(result.masterRgbPlane, result.outputWidth, result.outputHeight, 95, exif)
+                else JpegEncoder.encodeGray(ByteArray(pixelCount) { result.masterRgbPlane[it * 3] }, result.outputWidth, result.outputHeight, 95, exif),
             captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}}""",
-            processingMetadataJson = """{"pipeline": "${result.appliedPipelineName}", "guard": "${result.realityGuardDecision.action}", "colour": false}""",
+            processingMetadataJson = """{"pipeline": "${result.appliedPipelineName}", "guard": "${result.realityGuardDecision.action}", "colour": ${result.isColour}}""",
             format = "jpg"
         )
 
