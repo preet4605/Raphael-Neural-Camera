@@ -101,6 +101,9 @@ so it cannot be counted.
 - New and changed pure-Kotlin sources plus the existing `models`, `neural-isp`, `neural-runtime` (ONNX Runtime CPU EP on
   the host), `quality-engine`, `video-engine`, `data-lab` and `gallery` tests were compiled with Kotlin 2.0.21 and run
   on a host JVM: **200 tests, 0 failures**.
+- Later roadmap commits on this branch (C1, C5, D1–D3, J1–J4, Q1/Q3/Q4, P1–P3, N1/N2) extend the same host run to
+  **275 tests, 0 failures** (also `capture-intelligence` policy/scene, `ui` capability rules and `camera-core` 3A/ring
+  tests). Still synthetic or JVM-only: no item above is device evidence.
 - Not compiled here: Android-dependent code (`app`, `ui`, `camera-core` Camera2 classes). Edits there (`MainActivity`
   gallery save, two UI default strings) rely on CI.
 - PR #1's CI was red when this branch was cut (owned by another thread); this branch's CI result is in the PR.
