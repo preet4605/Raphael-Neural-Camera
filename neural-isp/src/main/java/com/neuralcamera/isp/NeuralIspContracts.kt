@@ -45,11 +45,20 @@ data class ProcessedImageResult(
     }
 }
 
+/** Per-capture processing choices (set by the shooting mode). Defaults are the AUTO behaviour. */
+data class ProcessingOptions(
+    /** Display contrast S-curve on luma; false keeps the merged luma code values. */
+    val contrastCurve: Boolean = true,
+    /** Merge chroma across frames along the luma motion; false uses the reference frame's chroma. */
+    val mergeChroma: Boolean = true
+)
+
 interface ImagePipeline {
     suspend fun processFrames(
         frames: List<CameraFrame>,
         targetWidth: Int,
         targetHeight: Int,
-        requestNeuralAcceleration: Boolean
+        requestNeuralAcceleration: Boolean,
+        options: ProcessingOptions = ProcessingOptions()
     ): ProcessedImageResult
 }

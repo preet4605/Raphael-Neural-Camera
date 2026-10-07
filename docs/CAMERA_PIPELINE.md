@@ -69,10 +69,19 @@ Every stage of the pipeline runs on designated, non-blocking coroutine dispatche
 
 ## 4. Shooting Modes & Capture Strategy
 
-- **AUTO**: Intelligent exposure balancing; calculates temporal depth (1 to 8 frames) based on scene lux and motion vectors.
-- **PRO**: Manual photographic controls (ISO 50–25600, shutter 1/32000s to 30s, EV bias, manual focus distance), uncompressed RAW10/12 stream capture.
-- **MASTER**: Extended burst acquisition (up to 16 frames), exposure bracketing, wide dynamic range tone reconstruction.
-- **AUTHENTIC**: Ground-truth prioritized rendering with zero synthetic texture generation, conservative deblurring, and natural chromatic reproduction.
+What each mode changes today (`capture/policy/ModeBehaviour.kt`, frame counts and exposure from `UniversalCapturePlanner`).
+Every mode is captured -> reconstructed; thermal and battery overrides can only shrink the burst. The app path is YUV
+(8-bit), so no mode produces RAW output yet.
+
+| Mode | Policy | Luma | Chroma | Contrast curve |
+|---|---|---|---|---|
+| AUTO | BALANCED | merged | merged along luma motion | yes |
+| PRO | BALANCED (manual ISO/shutter honoured by the planner) | merged | merged | no (flat, for grading) |
+| MASTER | MAXIMUM (larger burst budget) | merged | merged | yes |
+| AUTHENTIC | BALANCED | merged (noise averaging) | reference frame only | no |
+
+No mode runs a neural stage: none is VERIFIED on a device (Gate 2). MASTER's policy allows one once it is. Exposure
+bracketing is planned for MASTER but not merged (no HDR merge exists). Device behaviour NOT_TESTED.
 
 ---
 

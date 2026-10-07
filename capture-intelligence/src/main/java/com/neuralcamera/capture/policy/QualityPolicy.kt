@@ -80,11 +80,8 @@ object QualityPolicies {
         return of(requested) to null
     }
 
-    /** Default policy per shooting mode (design default; per-mode behaviour beyond this is Phase Q work). */
-    fun requestedFor(mode: CameraShootingMode): QualityPolicyId = when (mode) {
-        CameraShootingMode.MASTER -> QualityPolicyId.MAXIMUM
-        CameraShootingMode.AUTO, CameraShootingMode.PRO, CameraShootingMode.AUTHENTIC -> QualityPolicyId.BALANCED
-    }
+    /** Policy each shooting mode requests ([ModeBehaviours]). */
+    fun requestedFor(mode: CameraShootingMode): QualityPolicyId = ModeBehaviours.of(mode).policy
 
     /**
      * Applies device conditions to a planned burst. Without an override the planner's frame count stands; with a
