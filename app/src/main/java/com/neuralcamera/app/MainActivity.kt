@@ -27,6 +27,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var app: NeuralCameraApplication
     private var activePreviewSurface: Surface? = null
     private var uiState by mutableStateOf(CameraUIState())
+    /** PRO stops inside the active camera's reported ranges; empty when it has no manual-sensor support. */
+    private var isoStops: List<Int> = emptyList()
+    private var shutterStops: List<Long> = emptyList()
 
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -52,12 +55,13 @@ class MainActivity : ComponentActivity() {
                 state = uiState,
                 onModeSelected = { selectedMode ->
                     val frames = planFor(selectedMode).temporalFrameCount
+                    val behaviour = com.neuralcamera.capture.policy.ModeBehaviours.of(selectedMode)
                     uiState = uiState.copy(
                         activeMode = selectedMode,
                         statusMessage = null,
-                        infoMessage = "${selectedMode.name}: $frames frame${if (frames == 1) "" else "s"} per shot " +
-                            "(a mode currently only sets the burst length; exposure stays on camera auto)"
+                        infoMessage = "${selectedMode.name}: $frames frame${if (frames == 1) "" else "s"} per shot; ${behaviour.summary}"
                     )
+                    if (selectedMode == com.neuralcamera.capture.CameraShootingMode.PRO) refreshProControls()
                     app.telemetryLogger.logEvent("MODE_CHANGED", mapOf("mode" to selectedMode.name, "frames" to frames))
                 },
                 onZoomSelected = { zoom ->
@@ -103,8 +107,94 @@ class MainActivity : ComponentActivity() {
                 },
                 onToggleDiagnostics = {
                     uiState = uiState.copy(showDiagnostics = !uiState.showDiagnostics)
+                },
+                onManualExposureToggled = {
+                    uiState.proExposure?.let { uiState = uiState.copy(proExposure = it.copy(manual = !it.manual)) }
+                },
+                onIsoStep = { delta ->
+                    uiState.proExposure?.let { uiState = uiState.copy(proExposure = it.copy(isoIndex = (it.isoIndex + delta).coerceIn(0, isoStops.size - 1))) }
+                },
+                onShutterStep = { delta ->
+                    uiState.proExposure?.let { uiState = uiState.copy(proExposure = it.copy(shutterIndex = (it.shutterIndex + delta).coerceIn(0, shutterStops.size - 1))) }
                 }
             )
+        }
+    }
+
+    /**
+     * PRO controls from the active camera's manual-sensor ranges, seeded from the preview's current auto exposure (else
+     * ISO 400, 1/60 s). Hidden (null) when the camera does not report manual-sensor support.
+     */
+    private fun refreshProControls() {
+        val limits = runCatching { app.cameraController.exposureLimits() }.getOrNull()
+        isoStops = limits?.let { com.neuralcamera.cameracore.threea.ManualStops.iso(it.sensitivityRange) } ?: emptyList()
+        shutterStops = limits?.let { com.neuralcamera.cameracore.threea.ManualStops.shutterNs(it.exposureTimeRangeNs) } ?: emptyList()
+        if (isoStops.isEmpty() || shutterStops.isEmpty()) {
+            uiState = uiState.copy(proExposure = null)
+            return
+        }
+        val seed = app.cameraController.latestPreviewExposure
+        val stops = com.neuralcamera.cameracore.threea.ManualStops
+        val isoIndex = stops.nearest(isoStops.map { it.toLong() }, (seed?.sensitivityIso ?: 400).toLong())
+        val shutterIndex = stops.nearest(shutterStops, seed?.exposureTimeNs ?: 16_666_667L)
+        uiState = uiState.copy(
+            proExposure = com.neuralcamera.ui.ProExposureControls(
+                isoStops.map { it.toString() }, isoIndex, shutterStops.map(stops::shutterLabel), shutterIndex,
+                manual = uiState.proExposure?.manual ?: false
+            )
+        )
+    }
+
+    /** The manual setting to request for this shot: only in PRO with manual exposure on. */
+    private fun manualExposureForShot(): com.neuralcamera.cameracore.threea.ExposureSetting? {
+        val pro = uiState.proExposure ?: return null
+        if (uiState.activeMode != com.neuralcamera.capture.CameraShootingMode.PRO || !pro.manual) return null
+        val t = shutterStops.getOrNull(pro.shutterIndex) ?: return null
+        val iso = isoStops.getOrNull(pro.isoIndex) ?: return null
+        return com.neuralcamera.cameracore.threea.ExposureSetting(t, iso, 0.0, clamped = false)
+    }
+
+    /**
+     * Scene illuminance for planning: estimated from the preview's settled auto-exposure (an estimate, not a light
+     * meter), else a fixed 120 lux placeholder. The source is saved with the capture metadata.
+     */
+    private fun sceneLux(): Pair<Float, String> {
+        val e = app.cameraController.latestPreviewExposure
+        val ae = e?.aeState
+        val settled = ae != null && ae in com.neuralcamera.cameracore.threea.ConvergenceDetector.AE_SETTLED
+        val lux = if (settled) com.neuralcamera.capture.scene.SceneAnalyzer.estimatedLuxFromAutoExposure(e?.exposureTimeNs, e?.sensitivityIso, e?.aperture) else null
+        return if (lux != null) lux.toFloat() to "AE_ESTIMATE" else 120f to "PLACEHOLDER"
+    }
+
+    private fun planFor(mode: com.neuralcamera.capture.CameraShootingMode, lux: Float = sceneLux().first) = app.capturePlanner.planCapture(
+        mode = mode,
+        sceneLuminanceLux = lux,
+        motion = MotionVector(0.01f, 0.01f, 0.01f, true), // fixed placeholder: no motion estimate is wired yet
+        deviceProfile = app.deviceProfileRepository.getActiveProfile()
+    )
+
+    /** Inserts a JPEG into the system gallery (Pictures/Raphael); no storage permission is needed on API 30+. */
+    private fun saveToGallery(name: String, jpeg: ByteArray): String? {
+        var uri: android.net.Uri? = null
+        return try {
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "$name.jpg")
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Raphael")
+                put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+            }
+            val target = contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                ?: return null
+            uri = target
+            val stream = contentResolver.openOutputStream(target) ?: throw java.io.IOException("no output stream for $target")
+            stream.use { it.write(jpeg) }
+            values.clear(); values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
+            contentResolver.update(target, values, null, null)
+            "Pictures/Raphael/$name.jpg"
+        } catch (e: Exception) {
+            // Remove the pending row so a failed write never leaves a broken, half-written gallery entry.
+            uri?.let { runCatching { contentResolver.delete(it, null, null) } }
+            null
         }
     }
 
@@ -112,43 +202,30 @@ class MainActivity : ComponentActivity() {
      * Plans, captures, processes and saves one burst. Only frames returned by the camera are ever
      * processed: when capture yields nothing this throws and nothing is saved.
      */
-    private fun planFor(mode: com.neuralcamera.capture.CameraShootingMode) = app.capturePlanner.planCapture(
-        mode = mode,
-        sceneLuminanceLux = 120f, // fixed placeholder: no light sensor reading is wired yet
-        motion = MotionVector(0.01f, 0.01f, 0.01f, true), // fixed placeholder: no motion estimate is wired yet
-        deviceProfile = app.deviceProfileRepository.getActiveProfile()
-    )
-
-    /** Inserts a JPEG into the system gallery (Pictures/Raphael); no storage permission is needed on API 30+. */
-    private fun saveToGallery(name: String, jpeg: ByteArray): String? = try {
-        val values = android.content.ContentValues().apply {
-            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "$name.jpg")
-            put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Raphael")
-            put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
-        }
-        val uri = contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-        if (uri == null) null else {
-            contentResolver.openOutputStream(uri)?.use { it.write(jpeg) }
-            values.clear(); values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
-            contentResolver.update(uri, values, null, null)
-            "Pictures/Raphael/$name.jpg"
-        }
-    } catch (e: Exception) {
-        null
-    }
-
     private suspend fun captureAndSave(): String {
         val started = System.currentTimeMillis()
         // 1. Plan capture using UniversalCapturePlanner
-        val plan = planFor(uiState.activeMode)
+        val (lux, luxSource) = sceneLux()
+        val plan = planFor(uiState.activeMode, lux)
+        // Thermal/battery overrides can only shrink the burst; the decision is saved with the photo.
+        val decision = com.neuralcamera.capture.policy.QualityPolicies.decide(plan.temporalFrameCount, uiState.activeMode, app.deviceConditions())
+        val behaviour = com.neuralcamera.capture.policy.ModeBehaviours.of(uiState.activeMode)
 
         // 2. Acquire real hardware frames
-        val frames = app.cameraController.triggerBurstCapture(plan.temporalFrameCount)
-        check(frames.isNotEmpty()) { "Capture returned no frames; nothing was saved." }
+        // Precapture, 3A convergence and AE/AWB lock run before the burst; partial or unconverged captures are reported.
+        val manual = manualExposureForShot()
+        val burst = app.cameraController.captureBurst(decision.frames, manual = manual)
+        check(burst.usable) { "Capture ${burst.result.state}: ${burst.result.reason}; nothing was saved." }
+        val frames = burst.frames
+        val caveats = burst.caveats()
         app.telemetryLogger.logEvent(
             "BURST_CAPTURED",
-            mapOf("requested" to plan.temporalFrameCount, "received" to frames.size, "format" to frames.first().format, "size" to "${frames.first().width}x${frames.first().height}")
+            mapOf(
+                "requested" to plan.temporalFrameCount, "received" to frames.size, "format" to frames.first().format,
+                "size" to "${frames.first().width}x${frames.first().height}", "state" to burst.result.state.name,
+                "convergence" to (burst.convergence?.name ?: "NOT_CHECKED"), "attempts" to burst.result.attempts,
+                "lockedFrames" to (burst.lockedFrames ?: -1)
+            )
         )
         val reference = frames.last().metadata
 
@@ -159,9 +236,26 @@ class MainActivity : ComponentActivity() {
                 frames = frames,
                 targetWidth = frames.first().width,
                 targetHeight = frames.first().height,
-                requestNeuralAcceleration = false
+                requestNeuralAcceleration = false,
+                options = com.neuralcamera.isp.ProcessingOptions(contrastCurve = behaviour.contrastCurve, mergeChroma = behaviour.mergeChroma)
             )
         }
+
+        // Provenance: what each stage actually did (captured -> reconstructed), saved with the bundle and in EXIF.
+        val mediaId = "shot_${System.currentTimeMillis()}"
+        val provenance = com.neuralcamera.gallery.provenance.CaptureProvenance.forBurst(
+            mediaId, burst,
+            com.neuralcamera.gallery.provenance.MergeFacts(
+                framesIn = frames.size,
+                guardAction = result.realityGuardDecision.action.name,
+                blendRatio = result.realityGuardDecision.blendRatio,
+                referenceFallback = result.referenceFallback,
+                colour = result.isColour,
+                chromaMerged = result.chromaMerged
+            ),
+            policy = decision.policy.id.name,
+            policyOverride = decision.override
+        )
 
         // 4. Encode and save non-destructively. The master is a colour JPEG when the frames had chroma planes (luma is
         // merged, chroma comes from the reference frame), else grayscale; the original is the reference luma. A DNG
@@ -170,10 +264,10 @@ class MainActivity : ComponentActivity() {
             orientation = when (reference.sensorOrientation) { 90 -> 6; 180 -> 3; 270 -> 8; else -> 1 },
             exposureTimeSeconds = reference.exposureTimeNs.takeIf { it > 0 }?.let { it / 1e9 },
             iso = reference.iso.takeIf { it > 0 },
-            software = "Raphael Neural Camera"
+            software = "Raphael Neural Camera",
+            imageDescription = provenance.exifSummary()
         )
         val pixelCount = result.outputWidth * result.outputHeight
-        val mediaId = "shot_${System.currentTimeMillis()}"
         val master = withContext(Dispatchers.Default) {
             if (result.isColour) JpegEncoder.encodeRgb(result.masterRgbPlane, result.outputWidth, result.outputHeight, 95, exif)
             else JpegEncoder.encodeGray(ByteArray(pixelCount) { result.masterRgbPlane[it * 3] }, result.outputWidth, result.outputHeight, 95, exif)
@@ -186,8 +280,8 @@ class MainActivity : ComponentActivity() {
                 mediaId = mediaId,
                 originalBytes = original,
                 masterBytes = master,
-                captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}}""",
-                processingMetadataJson = """{"pipeline": "${result.appliedPipelineName}", "guard": "${result.realityGuardDecision.action}", "colour": ${result.isColour}}""",
+                captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}, "requested": ${burst.result.requested}, "capture_state": "${burst.result.state}", "convergence": "${burst.convergence ?: "NOT_CHECKED"}", "captured_without_convergence": ${burst.result.capturedWithoutConvergence}, "ae_lock_requested": ${burst.lockRequested}, "ae_locked_frames": ${burst.lockedFrames ?: "null"}, "attempts": ${burst.result.attempts}, "scene_lux": ${"%.1f".format(java.util.Locale.ROOT, lux)}, "scene_lux_source": "$luxSource", "motion_source": "PLACEHOLDER", "planned_frames": ${plan.temporalFrameCount}, "policy": "${decision.policy.id}", "policy_override": ${decision.override?.let { com.neuralcamera.gallery.provenance.ProvenanceRecord.q(it) } ?: "null"}, "heap_copied_bytes_measured": ${burst.copy?.bytesMoved ?: 0}, "manual_exposure": ${manual?.let { com.neuralcamera.gallery.provenance.ProvenanceRecord.q(com.neuralcamera.cameracore.threea.ManualFrameCheck.summary(it, burst.manualChecks)) } ?: "null"}}""",
+                processingMetadataJson = """{"mode": "${behaviour.mode}", "mode_behaviour": ${com.neuralcamera.gallery.provenance.ProvenanceRecord.q(behaviour.summary)}, "pipeline": ${com.neuralcamera.gallery.provenance.ProvenanceRecord.q(result.appliedPipelineName)}, "guard": "${result.realityGuardDecision.action}", "colour": ${result.isColour}, "provenance": ${provenance.toJson()}}""",
                 format = "jpg"
             )
         }
@@ -206,7 +300,8 @@ class MainActivity : ComponentActivity() {
         )
         val seconds = (System.currentTimeMillis() - started) / 1000.0
         return "Saved ${frames.size}-frame ${if (result.isColour) "colour" else "gray"} ${result.outputWidth}x${result.outputHeight} JPEG " +
-            "in ${"%.1f".format(seconds)} s" + (galleryPath?.let { " -> $it" } ?: " (gallery save failed; copy is in app storage)")
+            "in ${"%.1f".format(seconds)} s" + (galleryPath?.let { " -> $it" } ?: " (gallery save failed; copy is in app storage)") +
+            (if (caveats.isEmpty()) "" else " [${caveats.joinToString("; ")}]")
     }
 
     private fun startCameraPreviewIfReady() {
@@ -224,6 +319,7 @@ class MainActivity : ComponentActivity() {
                     else -> null
                 }
                 uiState = uiState.copy(statusMessage = error, supportedZoom = if (error == null) app.cameraController.supportedZoomRange() else null)
+                if (error == null) refreshProControls()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

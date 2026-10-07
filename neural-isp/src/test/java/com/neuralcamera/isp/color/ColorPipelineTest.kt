@@ -113,7 +113,7 @@ class ColorPipelineTest {
     @Test
     fun shoulderPreservesHueAndEncodesSrgbEndpoints() {
         val img = RgbImage(2, 1, floatArrayOf(0f, 0f, 0f, 4f, 2f, 1f))
-        val out = ToneMapper.toSrgb8(img)
+        val out = ToneMapper.toSrgb8(img, ToneParams(highlightDesaturation = 0.0))
         assertEquals(0, out[0].toInt() and 255)
         val r = (out[3].toInt() and 255).toDouble()
         val g = (out[4].toInt() and 255).toDouble()
@@ -129,7 +129,57 @@ class ColorPipelineTest {
         val cfa = CfaPattern.RGGB
         val t = ColorTransform.from(doubleArrayOf(0.5, 1.0, 0.6), null, null)
         val res = ColorPipeline.render(mosaicOf(cfa), cfa, t)
-        assertEquals(w * h * 3, res.srgb8.size)
+        assertEquals(w * h * 3, res.rgb8.size)
         assertEquals(ColorTransform.Source.WHITE_BALANCE_ONLY, res.transformSource)
+    }
+
+    private fun decode(out: ByteArray, i: Int) = Math.pow(((out[i].toInt() and 255) / 255.0 + 0.055) / 1.055, 2.4)
+
+    @Test
+    fun gamutMappingKeepsLuminanceAndHueWhereAClampWouldNot() {
+        val w = GamutMapping.luminanceWeights(OutputSpace.SRGB)
+        assertEquals(1.0, w.sum(), 1e-9)
+        // The P3 green primary: outside sRGB, so its sRGB coordinates have negative red and blue.
+        val xyz = OutputSpace.DISPLAY_P3.toXyzD50.apply(doubleArrayOf(0.0, 0.6, 0.0))
+        val rgb = OutputSpace.SRGB.fromXyzD50.apply(xyz)
+        assertTrue(rgb[0] < 0 && rgb[2] < 0)
+        val out = DoubleArray(3)
+        assertTrue(GamutMapping.toNonNegative(rgb[0], rgb[1], rgb[2], w, out))
+        assertTrue(out.all { it >= 0.0 } && out.min() == 0.0)
+        val y = w[0] * rgb[0] + w[1] * rgb[1] + w[2] * rgb[2]
+        assertEquals(y, w[0] * out[0] + w[1] * out[1] + w[2] * out[2], 1e-12)
+        // Same direction from grey: the mapped chroma is a positive multiple of the original.
+        val k = (out[1] - y) / (rgb[1] - y)
+        assertTrue(k > 0 && k < 1)
+        for (c in 0..2) assertEquals(rgb[c] - y, (out[c] - y) / k, 1e-9)
+        val clampedY = w[1] * rgb[1] // the old clamp to zero, for comparison
+        assertTrue("clamp raises luminance", clampedY > y * 1.05)
+        // In-gamut colours are untouched; zero or negative luminance becomes black.
+        assertTrue(!GamutMapping.toNonNegative(0.2, 0.3, 0.4, w, out) && out.contentEquals(doubleArrayOf(0.2, 0.3, 0.4)))
+        GamutMapping.toNonNegative(-0.5, 0.1, 0.0, w, out)
+        assertTrue(out.all { it == 0.0 })
+    }
+
+    @Test
+    fun highlightsDesaturateTowardsWhiteMonotonicallyAndMidtonesAreUntouched() {
+        val params = ToneParams()
+        var prev = DoubleArray(3)
+        var prevSpread = Double.MAX_VALUE
+        var k = 0.5
+        while (k < 64.0) {
+            val out = ToneMapper.toSrgb8(RgbImage(1, 1, floatArrayOf((0.8 * k).toFloat(), (0.4 * k).toFloat(), (0.2 * k).toFloat())), params)
+            val lin = DoubleArray(3) { decode(out, it) }
+            for (c in 0..2) assertTrue("channel $c at $k", lin[c] >= prev[c] - 1e-9)
+            val spread = lin[0] - lin[2]
+            if (k > 2.0) assertTrue("saturation falls in the shoulder at $k", spread <= prevSpread + 2e-3)
+            prev = lin; prevSpread = spread; k *= 1.1
+        }
+        assertTrue("very bright saturated light reaches white", prev.all { it > 0.97 })
+        // Below the shoulder nothing changes, desaturation or not.
+        val mid = RgbImage(1, 1, floatArrayOf(0.6f, 0.3f, 0.1f))
+        assertTrue(ToneMapper.toSrgb8(mid, params).contentEquals(ToneMapper.toSrgb8(mid, ToneParams(highlightDesaturation = 0.0))))
+        // Without desaturation the same light stays saturated: red over blue keeps the scene's 4:1.
+        val hot = ToneMapper.toSrgb8(RgbImage(1, 1, floatArrayOf(40f, 20f, 10f)), ToneParams(highlightDesaturation = 0.0))
+        assertEquals(4.0, decode(hot, 0) / decode(hot, 2), 0.3)
     }
 }

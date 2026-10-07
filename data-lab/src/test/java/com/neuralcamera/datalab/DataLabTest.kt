@@ -1,6 +1,7 @@
 package com.neuralcamera.datalab
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,7 +24,14 @@ class DataLabTest {
             "SCENE_02_INDOOR" to 36.0f
         )
         val report = manager.verifyRegression(normalMetrics)
-        assertTrue(report.isRegressionFree)
+        // Two measured scenes pass; the other twelve have no measurement and must not count as passed.
+        assertEquals(2, report.passedScenes)
+        assertEquals(12, report.notTestedScenes.size)
+        assertTrue(report.regressions.isEmpty())
+        assertFalse(report.isRegressionFree)
+
+        val all = ReferenceDatasetCatalog.CONTROLLED_SCENES.associate { it.sceneId to it.baselinePsnrMin + 1f }
+        assertTrue(manager.verifyRegression(all).isRegressionFree)
 
         val degradedMetrics = mapOf(
             "SCENE_01_DAYLIGHT" to 32.0f // Baseline is 38f -> regression

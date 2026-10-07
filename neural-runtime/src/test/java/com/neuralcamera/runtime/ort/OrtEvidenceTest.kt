@@ -50,6 +50,11 @@ class OrtEvidenceTest {
             listOf("libQnnHtp.so", "libQnnHtpV81Stub.so", "libcdsprpc.so"),
             ProcMaps.mappedLibraries(maps)
         )
+        // Full paths show whether the app-bundled or the vendor QNN copy was loaded.
+        assertEquals(
+            listOf("/data/app/x/lib/arm64/libQnnHtp.so", "/data/app/x/lib/arm64/libQnnHtpV81Stub.so", "/vendor/lib64/libcdsprpc.so"),
+            ProcMaps.mappedLibraryPaths(maps)
+        )
     }
 
     @Test

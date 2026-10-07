@@ -12,7 +12,9 @@ data class JpegExif(
     val orientation: Int? = null,
     val exposureTimeSeconds: Double? = null,
     val iso: Int? = null,
-    val software: String? = null
+    val software: String? = null,
+    /** IFD0 ImageDescription, e.g. the provenance summary. Non-ASCII characters are written as '?'. */
+    val imageDescription: String? = null
 )
 
 /**
@@ -131,7 +133,8 @@ object JpegEncoder {
     }
 
     /** @param rgb interleaved R,G,B bytes */
-    fun encodeRgb(rgb: ByteArray, width: Int, height: Int, quality: Int = 92, exif: JpegExif? = null): ByteArray {
+    /** @param iccProfile embedded as APP2 ICC_PROFILE (e.g. [IccProfile.forOutput] for Display P3 pixels); null = untagged (sRGB by convention) */
+    fun encodeRgb(rgb: ByteArray, width: Int, height: Int, quality: Int = 92, exif: JpegExif? = null, iccProfile: ByteArray? = null): ByteArray {
         require(rgb.size == width * height * 3) { "rgb buffer has ${rgb.size} bytes for ${width}x$height" }
         val n = width * height
         val y = ByteArray(n)
@@ -145,10 +148,11 @@ object JpegEncoder {
             cb[i] = (128 - 0.168736 * r - 0.331264 * g + 0.5 * b).roundToInt().coerceIn(0, 255).toByte()
             cr[i] = (128 + 0.5 * r - 0.418688 * g - 0.081312 * b).roundToInt().coerceIn(0, 255).toByte()
         }
-        return encode(arrayOf(y, cb, cr), 3, width, height, quality, exif)
+        return encode(arrayOf(y, cb, cr), 3, width, height, quality, exif, iccProfile)
     }
 
-    private fun encode(components: Array<ByteArray>, count: Int, width: Int, height: Int, quality: Int, exif: JpegExif?): ByteArray {
+    private fun encode(components: Array<ByteArray>, count: Int, width: Int, height: Int, quality: Int, exif: JpegExif?, icc: ByteArray? = null): ByteArray {
+        require(icc == null || icc.size <= 65519) { "ICC profiles larger than one APP2 segment are not supported" }
         require(width in 1..65535 && height in 1..65535) { "image size out of JPEG range" }
         val lumaQ = scaledTable(LUMA_Q, quality)
         val chromaQ = scaledTable(CHROMA_Q, quality)
@@ -165,6 +169,10 @@ object JpegEncoder {
         if (exif != null) {
             val tiff = ExifBlock.build(exif)
             if (tiff != null) { marker(0xE1); u16(2 + 6 + tiff.size); out.write("Exif".toByteArray()); out.write(0); out.write(0); out.write(tiff) }
+        }
+        if (icc != null) {
+            // APP2 "ICC_PROFILE\0", chunk 1 of 1.
+            marker(0xE2); u16(2 + 12 + 2 + icc.size); out.write("ICC_PROFILE".toByteArray()); out.write(0); out.write(1); out.write(1); out.write(icc)
         }
         for (t in 0 until (if (count == 1) 1 else 2)) {
             marker(0xDB); u16(67); out.write(t)
@@ -228,7 +236,7 @@ object JpegEncoder {
     }
 }
 
-/** Minimal EXIF TIFF block (little endian): IFD0 {Orientation, Software, ExifIFD} + Exif IFD {ExposureTime, ISO}. */
+/** Minimal EXIF TIFF block (little endian): IFD0 {ImageDescription, Orientation, Software, ExifIFD} + Exif IFD {ExposureTime, ISO}. */
 internal object ExifBlock {
     fun build(e: JpegExif): ByteArray? {
         class Entry(val tag: Int, val type: Int, val count: Int, val value: ByteArray)
@@ -245,6 +253,10 @@ internal object ExifBlock {
         val ifd0 = ArrayList<Entry>()
         e.orientation?.takeIf { it in 1..8 }?.let { ifd0.add(Entry(0x0112, 3, 1, le16(it))) }
         e.software?.let { s -> val b = s.toByteArray(Charsets.US_ASCII) + 0; ifd0.add(Entry(0x0131, 2, b.size, b)) }
+        e.imageDescription?.let { s ->
+            val b = s.map { if (it.code in 0x20..0x7E) it else '?' }.joinToString("").toByteArray(Charsets.US_ASCII) + 0
+            ifd0.add(Entry(0x010E, 2, b.size, b))
+        }
         if (ifd0.isEmpty() && exifEntries.isEmpty()) return null
         if (exifEntries.isNotEmpty()) ifd0.add(Entry(0x8769, 4, 1, ByteArray(4))) // patched below
         ifd0.sortBy { it.tag }

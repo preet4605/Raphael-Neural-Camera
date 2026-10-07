@@ -13,12 +13,16 @@ sourceSets {
             srcDir("src/main/kotlin")
             srcDir("../../neural-isp/src/main/java")
             srcDir("../../benchmarks/src/main/java")
+            srcDir("../../models/src/main/java")
             include(
                 "BurstMergeTool.kt",
                 "com/neuralcamera/isp/temporal/**",
                 "com/neuralcamera/isp/dng/**",
                 "com/neuralcamera/isp/color/**",
                 "com/neuralcamera/isp/encode/**",
+                "com/neuralcamera/isp/calibration/SensorCalibration.kt",
+                "com/neuralcamera/isp/raw/**",
+                "com/neuralcamera/models/execution/**",
                 "com/neuralcamera/benchmarks/Json.kt"
             )
         }

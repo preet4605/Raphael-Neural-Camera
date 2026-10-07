@@ -22,26 +22,21 @@ class StandardVideoPipeline : VideoPipeline {
         }
 
         frameCounter++
-        // Rule 24: Strictly enforce that heavyweight neural enhancement is never applied to every single frame.
-        // Instead, only lightweight keyframe stabilization/adaptation occurs every Nth frame, while intermediate frames bypass to encoder.
-        val isEnhancementKeyframe = (frameCounter % 15 == 0L)
-
-        val durationMs = measureTimeMillis {
-            if (isEnhancementKeyframe) {
-                // Lightweight keyframe tone/exposure analysis
-                Thread.sleep(2)
-            } else {
-                // Direct fast passthrough to hardware buffer
-            }
-        }
+        // Rule 24: heavyweight enhancement may only run on keyframes, never on every frame. No enhancement stage exists
+        // yet, so every frame passes through unprocessed and nothing is reported as enhanced.
+        val durationMs = measureTimeMillis { }
 
         return VideoFrameProcessingResult(
             frameSequence = frame.metadata.frameSequence,
             processingLatencyMs = durationMs,
-            neuralEnhanced = isEnhancementKeyframe,
-            dropped = false
+            neuralEnhanced = false,
+            dropped = false,
+            isEnhancementKeyframe = isEnhancementKeyframe(frameCounter)
         )
     }
+
+    /** Frames on which an enhancement stage would be allowed to run (every 15th), once one exists. */
+    fun isEnhancementKeyframe(index: Long): Boolean = index % 15 == 0L
 
     override suspend fun finalizeRecording(): Boolean {
         isRecording = false

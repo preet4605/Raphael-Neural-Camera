@@ -63,4 +63,21 @@ if grep -q 'project(":neural-runtime")' "$PROJECT_ROOT/ui/build.gradle.kts" 2>/d
 fi
 echo "  [OK] UI dependency boundary clean"
 
+echo "Checking proof flags (code never holds flag state; docs say TRUE only with committed checker output)..."
+FLAGS=(RAW_BURST_PROVEN HTP_INFERENCE_PROVEN CLASSICAL_MERGE_ADVANTAGE_PROVEN NEURAL_ISP_PROVEN PRODUCT_ADVANTAGE_PROVEN FULL_PIPELINE_PROVEN)
+for flag in "${FLAGS[@]}"; do
+    if grep -rlw --include='*.kt' --include='*.kts' --include='*.java' "$flag" "$PROJECT_ROOT" --exclude-dir=build --exclude-dir=.git >/dev/null 2>&1; then
+        echo "ERROR: $flag appears in source code; proof flags come only from the gate checkers"
+        exit 1
+    fi
+    if grep -Eq "^\| \`$flag\` \| \`TRUE\` \|" "$PROJECT_ROOT/docs/PROOF_GATES.md"; then
+        evidence="$PROJECT_ROOT/proof/$(echo "$flag" | tr '[:upper:]' '[:lower:]')/checker_output.txt"
+        if ! grep -q "^$flag=TRUE" "$evidence" 2>/dev/null; then
+            echo "ERROR: docs/PROOF_GATES.md marks $flag TRUE but $evidence does not contain the checker's $flag=TRUE line"
+            exit 1
+        fi
+    fi
+    echo "  [OK] $flag"
+done
+
 echo "=== All Architecture Checks Passed ==="

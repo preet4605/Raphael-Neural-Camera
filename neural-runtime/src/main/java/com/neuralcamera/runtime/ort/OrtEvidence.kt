@@ -54,6 +54,18 @@ object ProcMaps {
             .distinct()
             .sorted()
             .toList()
+
+    /**
+     * Distinct full paths of matching mapped files, sorted. Paths show which copy was loaded: the app's own
+     * (Maven-bundled QNN 2.42.0, under the app's lib directory) or a vendor one (device QNN 2.37.4, under /vendor).
+     */
+    fun mappedLibraryPaths(mapsText: String, patterns: List<String> = DEFAULT_PATTERNS): List<String> =
+        mapsText.lineSequence()
+            .map { it.substringAfterLast(' ').trim() }
+            .filter { it.startsWith('/') && patterns.any { p -> it.substringAfterLast('/').contains(p) } }
+            .distinct()
+            .sorted()
+            .toList()
 }
 
 /** One step of backend bring-up, kept verbatim in the evidence report (including failures). */

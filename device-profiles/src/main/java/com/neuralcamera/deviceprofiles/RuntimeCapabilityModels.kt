@@ -124,7 +124,9 @@ data class DiscoveredCameraProfile(
     val streams: StreamMatrixProfile,
     val android16: Android16Profile,
     val vendorExtensions: List<String> = emptyList(),
-    val capabilities: Map<String, CapabilityRecord<*>> = emptyMap()
+    val capabilities: Map<String, CapabilityRecord<*>> = emptyMap(),
+    /** Camera2 keys the device did not report, whose values above are placeholders; never treat them as discovered. */
+    val defaultedKeys: Set<String> = emptySet()
 )
 
 /**
@@ -162,8 +164,8 @@ data class RuntimeDeviceVerification(
     val cameras: Map<String, DiscoveredCameraProfile>,
     val logicalPhysicalMappings: Map<String, List<PhysicalCameraRecord>>,
     val streamMatrixResults: List<StreamTestResult>,
-    val zeroCopyDesignPass: Boolean = true,
-    val zeroCopyHardwareState: String = "PARTIAL",
+    val zeroCopyDesignPass: Boolean = false,
+    val zeroCopyHardwareState: String = "NOT_MEASURED",
     val actualBufferCopies: List<String> = emptyList(),
     val notes: String = ""
 )

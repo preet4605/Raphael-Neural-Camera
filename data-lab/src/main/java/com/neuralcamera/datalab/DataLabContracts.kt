@@ -31,8 +31,12 @@ data class RegressionVerificationReport(
     val totalScenes: Int,
     val passedScenes: Int,
     val regressions: List<String>,
-    val isRegressionFree: Boolean
-)
+    /** Scenes with no measurement. They are NOT_TESTED, never counted as passed. */
+    val notTestedScenes: List<String> = emptyList()
+) {
+    /** True only when every scene was measured and none regressed. */
+    val isRegressionFree: Boolean get() = regressions.isEmpty() && notTestedScenes.isEmpty()
+}
 
 object ReferenceDatasetCatalog {
 
@@ -63,11 +67,14 @@ class ReferenceDatasetManager {
 
     fun verifyRegression(measuredMetrics: Map<String, Float>): RegressionVerificationReport {
         val regressions = mutableListOf<String>()
+        val notTested = mutableListOf<String>()
         var passed = 0
 
         for (scene in ReferenceDatasetCatalog.CONTROLLED_SCENES) {
-            val measuredPsnr = measuredMetrics[scene.sceneId] ?: scene.baselinePsnrMin
-            if (measuredPsnr < scene.baselinePsnrMin - 0.5f) {
+            val measuredPsnr = measuredMetrics[scene.sceneId]
+            if (measuredPsnr == null) {
+                notTested.add(scene.sceneId)
+            } else if (measuredPsnr < scene.baselinePsnrMin - 0.5f) {
                 regressions.add("${scene.sceneId}: PSNR dropped to $measuredPsnr (baseline: ${scene.baselinePsnrMin})")
             } else {
                 passed++
@@ -78,7 +85,7 @@ class ReferenceDatasetManager {
             totalScenes = ReferenceDatasetCatalog.CONTROLLED_SCENES.size,
             passedScenes = passed,
             regressions = regressions,
-            isRegressionFree = regressions.isEmpty()
+            notTestedScenes = notTested
         )
     }
 }

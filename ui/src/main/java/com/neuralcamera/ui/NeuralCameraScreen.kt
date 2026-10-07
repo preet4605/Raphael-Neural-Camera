@@ -25,9 +25,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,6 +51,19 @@ import com.neuralcamera.ui.theme.PrecisionAmber
 import com.neuralcamera.ui.theme.StudioWhite
 import com.neuralcamera.ui.theme.ViewfinderBlack
 
+/**
+ * PRO manual exposure controls. Present only when the camera reported manual-sensor ranges; the option lists are the
+ * standard stops inside those ranges.
+ */
+data class ProExposureControls(
+    val isoLabels: List<String>,
+    val isoIndex: Int,
+    val shutterLabels: List<String>,
+    val shutterIndex: Int,
+    /** False: camera auto exposure (the values shown are not applied). */
+    val manual: Boolean
+)
+
 data class CameraUIState(
     val activeMode: CameraShootingMode = CameraShootingMode.AUTO,
     val activeZoomFactor: Float = 1.0f,
@@ -62,6 +80,8 @@ data class CameraUIState(
     val infoMessage: String? = null,
     /** Zoom ratios the active camera accepts; buttons outside it are dimmed. Null = not known yet. */
     val supportedZoom: ClosedFloatingPointRange<Float>? = null,
+    /** Manual exposure controls for PRO; null when the camera has not reported manual-sensor support. */
+    val proExposure: ProExposureControls? = null,
     val diagnosticsData: CameraDiagnosticsData = CameraDiagnosticsData()
 )
 
@@ -72,9 +92,13 @@ fun NeuralCameraScreen(
     onZoomSelected: (Float) -> Unit = {},
     onShutterPressed: () -> Unit = {},
     onToggleDiagnostics: () -> Unit = {},
+    onManualExposureToggled: () -> Unit = {},
+    onIsoStep: (Int) -> Unit = {},
+    onShutterStep: (Int) -> Unit = {},
     onSurfaceAvailable: (Surface) -> Unit = {},
     onSurfaceDestroyed: () -> Unit = {}
 ) {
+    val haptics = LocalHapticFeedback.current
     NeuralCameraTheme {
         Box(
             modifier = Modifier
@@ -126,7 +150,7 @@ fun NeuralCameraScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "NEURAL",
+                        text = CapabilityPresentation.processingBadge(state.isNeuralActive, state.neuralBackendName),
                         color = StudioWhite,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -141,7 +165,10 @@ fun NeuralCameraScreen(
                     color = PrecisionAmber,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.clickable { onToggleDiagnostics() }
+                    // Vertical padding brings the touch target to 48 dp; the bar is 64 dp tall.
+                    modifier = Modifier
+                        .clickable(role = Role.Button) { onToggleDiagnostics() }
+                        .padding(vertical = 18.dp, horizontal = 4.dp)
                 )
             }
 
@@ -152,30 +179,42 @@ fun NeuralCameraScreen(
                     .padding(bottom = 182.dp)
                     .clip(RoundedCornerShape(20.dp))
                     .background(DarkGunmetal.copy(alpha = 0.75f))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(horizontal = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val lenses = listOf(0.6f, 1.0f, 2.0f, 3.0f, 6.0f)
-                for (zoom in lenses) {
+                for (zoom in CapabilityPresentation.zoomButtons(state.supportedZoom)) {
                     val isSelected = (state.activeZoomFactor == zoom)
-                    val supported = state.supportedZoom?.let { zoom >= it.start - 1e-3f && zoom <= it.endInclusive + 1e-3f } ?: true
+                    // 48 dp touch target around a 36 dp chip.
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
-                            .background(if (isSelected) PrecisionAmber else Color.Transparent)
-                            .alpha(if (supported) 1f else 0.35f)
-                            .clickable { onZoomSelected(zoom) },
+                            .clickable(role = Role.Button) {
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onZoomSelected(zoom)
+                            }
+                            .semantics {
+                                contentDescription = CapabilityPresentation.zoomDescription(zoom, isSelected)
+                                selected = isSelected
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = if (zoom < 1.0f) ".6" else "${zoom.toInt()}x",
-                            color = if (isSelected) MatteBlack else StudioWhite,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            fontFamily = FontFamily.Monospace
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(if (isSelected) PrecisionAmber else Color.Transparent),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = CapabilityPresentation.zoomLabel(zoom),
+                                color = if (isSelected) MatteBlack else StudioWhite,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
                     }
                 }
             }
@@ -220,6 +259,11 @@ fun NeuralCameraScreen(
                     .padding(bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                val pro = state.proExposure
+                if (state.activeMode == CameraShootingMode.PRO && pro != null) {
+                    ProExposureRow(pro, onManualExposureToggled, onIsoStep, onShutterStep)
+                }
+
                 // Mode Carousel
                 Row(
                     modifier = Modifier
@@ -237,9 +281,11 @@ fun NeuralCameraScreen(
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             letterSpacing = 1.2.sp,
                             fontFamily = FontFamily.Monospace,
+                            // 13 sp text + 2 x 16 dp padding reaches the 48 dp minimum touch height.
                             modifier = Modifier
-                                .clickable { onModeSelected(mode) }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .clickable(role = Role.Tab) { onModeSelected(mode) }
+                                .semantics { selected = isSelected }
+                                .padding(horizontal = 8.dp, vertical = 16.dp)
                         )
                     }
                 }
@@ -254,14 +300,8 @@ fun NeuralCameraScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Gallery Thumbnail placeholder
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(DarkGunmetal)
-                            .border(1.dp, MutedSlate.copy(alpha = 0.4f), CircleShape)
-                    )
+                    // No gallery viewer or camera switch exists yet: keep their space, show no control for them.
+                    Spacer(modifier = Modifier.size(48.dp))
 
                     // Tactile Shutter Button
                     Box(
@@ -270,7 +310,11 @@ fun NeuralCameraScreen(
                             .clip(CircleShape)
                             .border(3.5.dp, StudioWhite, CircleShape)
                             .padding(6.dp)
-                            .clickable(enabled = !state.isCapturing) { onShutterPressed() },
+                            .clickable(enabled = !state.isCapturing, onClickLabel = "Take photo", role = Role.Button) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onShutterPressed()
+                            }
+                            .semantics { contentDescription = if (state.isCapturing) "Shutter, capturing" else "Shutter" },
                         contentAlignment = Alignment.Center
                     ) {
                         Box(
@@ -281,21 +325,7 @@ fun NeuralCameraScreen(
                         )
                     }
 
-                    // Camera Switch placeholder
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(DarkGunmetal),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "1x",
-                            color = MutedSlate,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
+                    Spacer(modifier = Modifier.size(48.dp))
                 }
             }
 
@@ -307,6 +337,60 @@ fun NeuralCameraScreen(
                         .align(Alignment.TopCenter)
                         .padding(top = 70.dp, start = 16.dp, end = 16.dp)
                 )
+            }
+        }
+    }
+}
+
+/** AUTO/MANUAL toggle and ISO / shutter steppers; values are dimmed while auto exposure is in charge. */
+@Composable
+private fun ProExposureRow(
+    pro: ProExposureControls,
+    onToggle: () -> Unit,
+    onIsoStep: (Int) -> Unit,
+    onShutterStep: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = if (pro.manual) "MANUAL" else "AUTO EXP",
+            color = if (pro.manual) PrecisionAmber else MutedSlate,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier
+                .clickable(role = Role.Switch) { onToggle() }
+                .semantics { contentDescription = if (pro.manual) "Manual exposure on" else "Manual exposure off" }
+                .padding(horizontal = 8.dp, vertical = 16.dp)
+        )
+        Stepper("ISO", pro.isoLabels.getOrNull(pro.isoIndex) ?: "-", pro.manual, onIsoStep)
+        Stepper("Shutter", pro.shutterLabels.getOrNull(pro.shutterIndex) ?: "-", pro.manual, onShutterStep)
+    }
+}
+
+@Composable
+private fun Stepper(name: String, value: String, enabled: Boolean, onStep: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        for ((delta, glyph) in listOf(-1 to "‹", 1 to "›")) {
+            if (delta == 1) {
+                Text(
+                    text = if (name == "ISO") "ISO $value" else value,
+                    color = if (enabled) StudioWhite else MutedSlate,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clickable(enabled = enabled, role = Role.Button) { onStep(delta) }
+                    .semantics { contentDescription = "$name ${if (delta < 0) "down" else "up"}, now $value" },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = glyph, color = if (enabled) PrecisionAmber else MutedSlate, fontSize = 18.sp, fontFamily = FontFamily.Monospace)
             }
         }
     }

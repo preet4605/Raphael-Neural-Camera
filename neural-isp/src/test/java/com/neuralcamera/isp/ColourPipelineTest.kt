@@ -30,7 +30,8 @@ class ColourPipelineTest {
         )
     }
 
-    private fun run(frames: List<CameraFrame>) = runBlocking { BaselineImagePipeline().processFrames(frames, w, h, false) }
+    private fun run(frames: List<CameraFrame>, options: ProcessingOptions = ProcessingOptions()) =
+        runBlocking { BaselineImagePipeline().processFrames(frames, w, h, false, options) }
 
     @Test
     fun redChromaGivesRedTintedColourOutput() {
@@ -43,6 +44,8 @@ class ColourPipelineTest {
             blue += r.masterRgbPlane[i * 3 + 2].toInt() and 255
         }
         assertTrue("R=$red G=$green B=$blue", red > green + w * h * 20 && red > blue + w * h * 20)
+        assertTrue(r.chromaMerged == (r.realityGuardDecision.action != com.neuralcamera.quality.GuardAction.REVERT_TO_ORIGINAL))
+        assertTrue(r.appliedPipelineName, r.appliedPipelineName.contains(if (r.chromaMerged) "chroma merged" else "chroma from the reference"))
     }
 
     @Test
@@ -59,6 +62,7 @@ class ColourPipelineTest {
     fun framesWithoutChromaPlanesStayGrayAndSaySo() {
         val r = run(List(3) { frame(it, 0, 0, withChroma = false) })
         assertFalse(r.isColour)
+        assertFalse(r.chromaMerged)
         for (i in 0 until w * h) assertEquals(r.masterRgbPlane[i * 3], r.masterRgbPlane[i * 3 + 2])
     }
 
@@ -68,5 +72,30 @@ class ColourPipelineTest {
         val bad = good.copy(planes = listOf(good.planes[0], FramePlane(ByteArray(10), 2, w), good.planes[2]))
         run(listOf(bad, frame(1, 90, 200, true), frame(2, 90, 200, true), frame(3, 90, 200, true))) // must not throw
         assertEquals(null, ChromaExtractor.toFullRes(bad))
+    }
+
+    @Test
+    fun withoutTheContrastCurveTheOutputIsTheMergedLumaItself() {
+        val frames = List(3) { frame(it, 0, 0, withChroma = false, rng = Rng(10L + it)) }
+        val curved = run(frames)
+        val flat = run(frames, ProcessingOptions(contrastCurve = false))
+        assertTrue(flat.appliedPipelineName, flat.appliedPipelineName.contains("no contrast curve"))
+        var differing = 0
+        for (i in 0 until w * h) {
+            val v = flat.masterRgbPlane[i * 3].toInt() and 255
+            val n = v / 255.0
+            assertEquals((n * n * (3 - 2 * n) * 255.0).toInt(), curved.masterRgbPlane[i * 3].toInt() and 255)
+            if (curved.masterRgbPlane[i * 3] != flat.masterRgbPlane[i * 3]) differing++
+        }
+        assertTrue("the option must change pixels ($differing)", differing > w * h / 4)
+    }
+
+    @Test
+    fun chromaMergeCanBeTurnedOff() {
+        val frames = List(3) { frame(it, cb = 90, cr = 200, withChroma = true, rng = Rng(20L + it)) }
+        val r = run(frames, ProcessingOptions(mergeChroma = false))
+        assertTrue(r.isColour)
+        assertFalse(r.chromaMerged)
+        assertTrue(r.appliedPipelineName, r.appliedPipelineName.contains("chroma from the reference"))
     }
 }

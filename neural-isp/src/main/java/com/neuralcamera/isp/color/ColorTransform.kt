@@ -11,14 +11,17 @@ package com.neuralcamera.isp.color
  * white-balance only (identity matrix); callers should treat that as unverified colour.
  */
 class ColorTransform(
-    /** Camera linear RGB (black-subtracted, normalized) to linear sRGB, white balance included. */
-    val cameraToLinearSrgb: Matrix3,
-    val source: Source
+    /** Camera linear RGB (black-subtracted, normalized) to linear [output] RGB, white balance included. */
+    val cameraToLinearOutput: Matrix3,
+    val source: Source,
+    /** How the calibration was chosen (dual-illuminant interpolation or why not). */
+    val note: String = "",
+    val output: OutputSpace = OutputSpace.SRGB
 ) {
     enum class Source { FORWARD_MATRIX, COLOR_MATRIX, WHITE_BALANCE_ONLY }
 
     fun apply(r: Float, g: Float, b: Float, out: FloatArray, offset: Int) {
-        val m = cameraToLinearSrgb.m
+        val m = cameraToLinearOutput.m
         out[offset] = (m[0] * r + m[1] * g + m[2] * b).toFloat()
         out[offset + 1] = (m[3] * r + m[4] * g + m[5] * b).toFloat()
         out[offset + 2] = (m[6] * r + m[7] * g + m[8] * b).toFloat()
@@ -35,7 +38,8 @@ class ColorTransform(
             -0.7502, 1.7135, 0.0367,
             0.0389, -0.0685, 1.0296
         ))
-        private val D50_WHITE = doubleArrayOf(0.9642, 1.0, 0.8249)
+        // The white the XYZ_D50_TO_SRGB matrix assumes (Lindbloom); a rounded value leaves a cast on white.
+        private val D50_WHITE = doubleArrayOf(0.96422, 1.0, 0.82521)
 
         private fun bradford(srcWhite: DoubleArray, dstWhite: DoubleArray): Matrix3 {
             val s = BRADFORD.apply(srcWhite)
@@ -48,20 +52,36 @@ class ColorTransform(
          * @param forwardMatrix 9 values row-major, or null
          * @param colorMatrix 9 values row-major, or null
          */
-        fun from(asShotNeutral: DoubleArray?, forwardMatrix: DoubleArray?, colorMatrix: DoubleArray?): ColorTransform {
+        fun from(asShotNeutral: DoubleArray?, forwardMatrix: DoubleArray?, colorMatrix: DoubleArray?, output: OutputSpace = OutputSpace.SRGB): ColorTransform {
+            // sRGB keeps the published matrix; other spaces use the matrix derived from their primaries.
+            val toOutput = if (output == OutputSpace.SRGB) XYZ_D50_TO_SRGB else output.fromXyzD50
             val neutral = asShotNeutral?.takeIf { it.size == 3 && it.all { v -> v.isFinite() && v > 0 } }
             val wb = neutral?.let { Matrix3.diag(1.0 / it[0], 1.0 / it[1], 1.0 / it[2]) } ?: Matrix3.IDENTITY
             val fm = forwardMatrix?.takeIf { it.size == 9 && it.all(Double::isFinite) }?.let { Matrix3(it) }
             if (fm != null && neutral != null) {
-                return ColorTransform(XYZ_D50_TO_SRGB * fm * wb, Source.FORWARD_MATRIX)
+                return ColorTransform(toOutput * fm * wb, Source.FORWARD_MATRIX, output = output)
             }
             val cm = colorMatrix?.takeIf { it.size == 9 && it.all(Double::isFinite) }?.let { Matrix3(it) }
             if (cm != null && neutral != null) {
                 val camToXyz = cm.inverse()
                 val white = camToXyz.apply(neutral)
-                return ColorTransform(XYZ_D50_TO_SRGB * bradford(white, D50_WHITE) * camToXyz, Source.COLOR_MATRIX)
+                return ColorTransform(toOutput * bradford(white, D50_WHITE) * camToXyz, Source.COLOR_MATRIX, output = output)
             }
-            return ColorTransform(wb, Source.WHITE_BALANCE_ONLY)
+            // No calibration: white balance only, in camera space whatever the requested output.
+            return ColorTransform(wb, Source.WHITE_BALANCE_ONLY, output = output)
+        }
+
+        /** As [from], after interpolating two calibration sets to the scene's estimated CCT ([DualIlluminant]). */
+        fun fromCalibration(
+            asShotNeutral: DoubleArray?, colorMatrix1: DoubleArray?, colorMatrix2: DoubleArray?,
+            forwardMatrix1: DoubleArray?, forwardMatrix2: DoubleArray?, illuminant1: Int?, illuminant2: Int?,
+            output: OutputSpace = OutputSpace.SRGB
+        ): ColorTransform {
+            val valid = { m: DoubleArray? -> m?.takeIf { it.size == 9 && it.all(Double::isFinite) } }
+            val r = DualIlluminant.interpolate(asShotNeutral, valid(colorMatrix1), valid(colorMatrix2), valid(forwardMatrix1),
+                valid(forwardMatrix2), illuminant1, illuminant2)
+            val t = from(asShotNeutral, r.forwardMatrix ?: valid(forwardMatrix1).takeIf { r.weight1 == 1.0 }, r.colorMatrix, output)
+            return ColorTransform(t.cameraToLinearOutput, t.source, r.note, output)
         }
     }
 }

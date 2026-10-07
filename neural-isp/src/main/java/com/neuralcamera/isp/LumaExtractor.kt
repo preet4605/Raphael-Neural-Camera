@@ -36,12 +36,15 @@ internal object ChromaExtractor {
 
     class Chroma(val cb: ByteArray, val cr: ByteArray)
 
-    fun toFullRes(frame: CameraFrame): Chroma? {
+    /** Native 4:2:0 chroma: [width] x [height] = ceil(frame / 2), values 0..255. */
+    class HalfChroma(val width: Int, val height: Int, val cb: IntArray, val cr: IntArray)
+
+    fun toFullRes(frame: CameraFrame): Chroma? = halfRes(frame)?.let { upsample(it, frame.width, frame.height) }
+
+    fun halfRes(frame: CameraFrame): HalfChroma? {
         if (frame.format != "YUV_420_888" || frame.planes.size < 3) return null
-        val w = frame.width
-        val h = frame.height
-        val cw = (w + 1) / 2
-        val ch = (h + 1) / 2
+        val cw = (frame.width + 1) / 2
+        val ch = (frame.height + 1) / 2
         fun half(index: Int): IntArray? {
             val p = frame.planes[index]
             if (p.pixelStride < 1 || p.rowStride < (cw - 1) * p.pixelStride + 1) return null
@@ -51,8 +54,13 @@ internal object ChromaExtractor {
         }
         val u = half(1) ?: return null
         val v = half(2) ?: return null
+        return HalfChroma(cw, ch, u, v)
+    }
 
-        fun upsample(src: IntArray): ByteArray {
+    fun upsample(c: HalfChroma, w: Int, h: Int): Chroma {
+        val cw = c.width
+        val ch = c.height
+        fun plane(src: IntArray): ByteArray {
             val out = ByteArray(w * h)
             for (y in 0 until h) {
                 val fy = ((y - 0.5f) / 2f).coerceIn(0f, (ch - 1).toFloat())
@@ -71,6 +79,6 @@ internal object ChromaExtractor {
             }
             return out
         }
-        return Chroma(upsample(u), upsample(v))
+        return Chroma(plane(c.cb), plane(c.cr))
     }
 }

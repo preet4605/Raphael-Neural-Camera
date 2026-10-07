@@ -25,13 +25,50 @@ data class FrameMergeStats(
     val tilesRejected: Int,
     val tilesTotal: Int,
     /** Mean absolute difference to the reference after alignment, in the reference's normalized units. */
-    val meanAbsResidual: Double
+    val meanAbsResidual: Double,
+    /** Per-tile merge confidence for this frame; null when not computed. */
+    val tileWeights: TileWeights? = null
 )
+
+/**
+ * Mean robust weight of one alternate frame per tile of the merge grid ([TileGrid] layout): 1 = fully merged,
+ * 0 = rejected (motion, occlusion, misalignment), NaN = nothing comparable (out of bounds or clipped).
+ */
+class TileWeights(val tilesX: Int, val tilesY: Int, val weights: FloatArray) {
+    init {
+        require(weights.size == tilesX * tilesY) { "one weight per tile" }
+    }
+
+    fun at(kx: Int, ky: Int): Float = weights[ky * tilesX + kx]
+
+    /** Fraction of the comparable tiles whose weight is below [threshold]. */
+    fun fractionBelow(threshold: Float): Double {
+        val valid = weights.filter { !it.isNaN() }
+        return if (valid.isEmpty()) Double.NaN else valid.count { it < threshold }.toDouble() / valid.size
+    }
+
+    override fun equals(other: Any?) = other is TileWeights && tilesX == other.tilesX && tilesY == other.tilesY && weights.contentEquals(other.weights)
+    override fun hashCode() = 31 * (31 * tilesX + tilesY) + weights.contentHashCode()
+
+    companion object {
+        /** Mean of several planes' weights per tile, ignoring NaN (the Bayer merge's four colour planes). */
+        fun meanOf(list: List<TileWeights>): TileWeights {
+            val f = list.first()
+            require(list.all { it.tilesX == f.tilesX && it.tilesY == f.tilesY }) { "grids differ" }
+            return TileWeights(f.tilesX, f.tilesY, FloatArray(f.weights.size) { i ->
+                val v = list.map { it.weights[i] }.filter { !it.isNaN() }
+                if (v.isEmpty()) Float.NaN else v.average().toFloat()
+            })
+        }
+    }
+}
 
 class MergeResult(
     /** Merged scene-referred linear values on the reference's normalized scale (can exceed 1 when brighter detail is recovered from shorter exposures). */
     val output: FloatPlane,
-    val frameStats: List<FrameMergeStats>
+    val frameStats: List<FrameMergeStats>,
+    /** Motion field of each alternate frame (reference excluded, frame order), for merging other planes along it. */
+    val fields: List<MotionField> = emptyList()
 )
 
 /** Per-worker scratch buffers for one tile. */
@@ -97,6 +134,8 @@ object TemporalMerger {
         val refCommon = commonValues(ref)
         val tilesX = TileGrid.tilesFor(w)
         val tilesY = TileGrid.tilesFor(h)
+        // Each tile slot is written by exactly one worker, so these need no reduction.
+        val tileWeights = List(alts.size) { FloatArray(tilesX * tilesY) { Float.NaN } }
 
         // Tile rows ky and ky+2 do not overlap, so all even rows run in parallel, then all odd rows. The schedule (and
         // therefore the result) does not depend on the thread count.
@@ -238,6 +277,7 @@ object TemporalMerger {
                     tilesConsidered[ai]++
                     if (tCount > 0 && tSum / tCount > params.tileRejectMeanT) {
                         tilesRejected[ai]++
+                        tileWeights[ai][ky * tilesX + kx] = 0f
                         // A rejected tile still counts toward the denominator of the frame's mean weight, with weight 0.
                         for (v in 0 until T) for (u in 0 until T) {
                             val x = x0 + u
@@ -258,6 +298,8 @@ object TemporalMerger {
                             }
                         }
                     }
+                    var tileWeight = 0.0
+                    var tileWindow = 0.0
                     for (v in 0 until T) for (u in 0 until T) {
                         val i = v * T + u
                         val x = x0 + u
@@ -269,11 +311,14 @@ object TemporalMerger {
                         den[y * w + x] += wgt
                         sumWeight[ai] += (win * rob[i]).toDouble()
                         sumWindow[ai] += win.toDouble()
+                        tileWeight += (win * rob[i]).toDouble()
+                        tileWindow += win.toDouble()
                         if (!d[i].isNaN()) {
                             sumResidual[ai] += abs(d[i]).toDouble()
                             residualCount[ai]++
                         }
                     }
+                    if (tileWindow > 0) tileWeights[ai][ky * tilesX + kx] = (tileWeight / tileWindow).toFloat()
                 }
             }
         }
@@ -302,7 +347,8 @@ object TemporalMerger {
                 meanWeight = if (sumWindow[ai] > 0) sumWeight[ai] / sumWindow[ai] else 0.0,
                 tilesRejected = tilesRejected[ai],
                 tilesTotal = tilesConsidered[ai],
-                meanAbsResidual = if (residualCount[ai] > 0) sumResidual[ai] / residualCount[ai] else Double.NaN
+                meanAbsResidual = if (residualCount[ai] > 0) sumResidual[ai] / residualCount[ai] else Double.NaN,
+                tileWeights = TileWeights(tilesX, tilesY, tileWeights[ai])
             )
         }
         return MergeResult(out, stats)
@@ -352,17 +398,23 @@ object TemporalMerge {
         noise: NoiseModel,
         mergeParams: MergeParams = MergeParams(),
         alignParams: AlignParams = AlignParams(),
-        threads: Int = defaultThreads()
+        threads: Int = defaultThreads(),
+        /** Per frame index (the reference's entry is ignored), in frame pixels; null entries align unseeded. */
+        seeds: List<AlignmentSeed?>? = null
     ): MergeResult {
+        require(seeds == null || seeds.size == frames.size) { "one seed slot per frame" }
         require(frames.isNotEmpty()) { "no frames" }
         require(referenceIndex in frames.indices) { "reference index out of range" }
         val ref = frames[referenceIndex]
         val alts = frames.filterIndexed { i, _ -> i != referenceIndex }
+        val altSeeds = seeds?.filterIndexed { i, _ -> i != referenceIndex }
         val refProxy = AlignmentProxy.of(ref)
         val aligner = TileAligner(alignParams)
         val fields = arrayOfNulls<MotionField>(alts.size)
-        Parallel.run(alts.size, threads) { index, _ -> fields[index] = aligner.align(refProxy, AlignmentProxy.of(alts[index])) }
-        return TemporalMerger.merge(ref, alts, fields.map { it!! }, noise, mergeParams, threads)
+        Parallel.run(alts.size, threads) { index, _ -> fields[index] = aligner.align(refProxy, AlignmentProxy.of(alts[index]), altSeeds?.get(index)) }
+        val aligned = fields.map { it!! }
+        val merged = TemporalMerger.merge(ref, alts, aligned, noise, mergeParams, threads)
+        return MergeResult(merged.output, merged.frameStats, aligned)
     }
 }
 

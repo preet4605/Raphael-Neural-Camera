@@ -20,8 +20,12 @@ data class ProcessedImageResult(
     val appliedPipelineName: String,
     /** True when [masterRgbPlane] carries real colour (from the frame's chroma planes); false means R=G=B gray. */
     val isColour: Boolean = false,
+    /** Chroma was temporally merged (false: the reference frame's own chroma, or no chroma). */
+    val chromaMerged: Boolean = false,
     /** Per alternate frame: how much of it the temporal merge used (input for the quality engine). */
-    val temporalStats: List<FrameMergeStats> = emptyList()
+    val temporalStats: List<FrameMergeStats> = emptyList(),
+    /** Every frame failed the quality checks and the sharpest was used as merge reference anyway. */
+    val referenceFallback: Boolean = false
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -41,11 +45,20 @@ data class ProcessedImageResult(
     }
 }
 
+/** Per-capture processing choices (set by the shooting mode). Defaults are the AUTO behaviour. */
+data class ProcessingOptions(
+    /** Display contrast S-curve on luma; false keeps the merged luma code values. */
+    val contrastCurve: Boolean = true,
+    /** Merge chroma across frames along the luma motion; false uses the reference frame's chroma. */
+    val mergeChroma: Boolean = true
+)
+
 interface ImagePipeline {
     suspend fun processFrames(
         frames: List<CameraFrame>,
         targetWidth: Int,
         targetHeight: Int,
-        requestNeuralAcceleration: Boolean
+        requestNeuralAcceleration: Boolean,
+        options: ProcessingOptions = ProcessingOptions()
     ): ProcessedImageResult
 }

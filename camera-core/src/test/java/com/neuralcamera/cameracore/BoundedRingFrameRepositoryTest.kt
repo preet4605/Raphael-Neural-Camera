@@ -60,4 +60,29 @@ class BoundedRingFrameRepositoryTest {
         assertTrue(repo.currentResidencyBytes() <= 250)
         assertEquals(2, repo.getRecentFrames(10).size)
     }
+
+    @Test
+    fun aFrameLargerThanTheWholeBudgetIsRefusedAndTheRingKept() {
+        val repo = BoundedRingFrameRepository(maxCapacity = 10, maxSizeBytes = 250)
+        repo.pushFrame(createDummyFrame("f1", 1, 100))
+        repo.pushFrame(createDummyFrame("huge", 2, 300))
+        assertEquals(listOf("f1"), repo.getRecentFrames(10).map { it.frameId })
+        assertEquals(1L, repo.oversizeCount)
+        assertEquals(100L, repo.currentResidencyBytes())
+    }
+
+    @Test
+    fun takingFramesForAShotRemovesTheOnesClosestToThePress() {
+        val repo = BoundedRingFrameRepository(maxCapacity = 8, maxSizeBytes = 10_000)
+        for (s in 1L..8L) repo.pushFrame(createDummyFrame("f$s", s, 100)) // timestamps 1..8 ms
+        val take = repo.takeClosestTo(shutterTimestampNs = 5_400_000L, count = 3)
+        assertEquals(listOf("f4", "f5", "f6"), take.frames.map { it.frameId })
+        assertEquals(-400_000L, take.nearestOffsetNs)
+        // Taken frames leave the ring; later eviction cannot close them.
+        assertEquals(listOf("f1", "f2", "f3", "f7", "f8"), repo.getRecentFrames(10).map { it.frameId })
+        assertEquals(500L, repo.currentResidencyBytes())
+        val rest = repo.takeClosestTo(shutterTimestampNs = 100_000_000L, count = 10)
+        assertEquals(5, rest.frames.size)
+        assertEquals(0L, repo.currentResidencyBytes())
+    }
 }

@@ -1,7 +1,9 @@
 package com.neuralcamera.cameracore
 
 /**
- * Record documenting an actual or potential memory copy in the camera pipeline.
+ * Record documenting an actual or potential memory copy in the camera pipeline. [measured] is true only for records
+ * built from counted bytes ([ZeroCopyAuditor.measuredBurstCopy]); [ZeroCopyAuditor.auditPipeline] records are design
+ * expectations.
  */
 data class BufferCopyRecord(
     val stage: String,
@@ -11,25 +13,50 @@ data class BufferCopyRecord(
     val frequency: String, // e.g. "Per Frame", "Per Still Capture", "Zero"
     val isAvoidable: Boolean,
     val reason: String,
-    val latencyImpactMs: Float
+    val latencyImpactMs: Float,
+    val measured: Boolean = false
 )
 
 /**
  * Audit result evaluating the zero-copy pipeline architecture and physical implementation.
  */
 data class ZeroCopyAuditReport(
-    val zeroCopyDesignStatus: String = "PASS",
-    val actualHardwarePathStatus: String, // "PASS", "PARTIAL", "FAIL", "UNKNOWN"
+    /** Whether the *design* avoids per-frame CPU copies: "NO_COPIES_EXPECTED" or "COPIES_EXPECTED". Not evidence. */
+    val zeroCopyDesignStatus: String,
+    /** Always "NOT_MEASURED" until a device trace measures buffer movement. Zero-copy is NOT_PROVEN. */
+    val actualHardwarePathStatus: String,
     val copies: List<BufferCopyRecord>,
     val totalPerFrameCopiedBytes: Long,
     val summary: String
 )
 
 /**
- * Zero-copy pipeline instrumentation and auditing engine adhering to Sections 13 and 41.
- * Honestly measures, quantifies, and reports all memory movements and API boundaries.
+ * Zero-copy design audit. It lists the buffer movements the design expects for a configuration; it measures nothing.
+ * The real burst path copies every YUV frame into the JVM heap (CopiedYuv), and no HardwareBuffer/Vulkan/QNN path
+ * exists, so the zero-copy claim stays NOT_PROVEN regardless of what this report lists.
  */
 object ZeroCopyAuditor {
+
+    /**
+     * A measured record of the YUV burst path: [bytes] actually copied from camera Image planes into JVM arrays for
+     * [images] images (all attempts, including frames later dropped). This is the one copy the app can count today;
+     * it proves copies exist on this path, not the absence of others.
+     */
+    fun measuredBurstCopy(bytes: Long, images: Int): BufferCopyRecord? {
+        require(bytes >= 0 && images >= 0) { "counts cannot be negative" }
+        if (images == 0) return null
+        return BufferCopyRecord(
+            stage = "Camera ImageReader -> JVM heap (CopiedYuv)",
+            source = "android.media.Image planes",
+            destination = "JVM ByteArray (FramePlane)",
+            bytesMoved = bytes,
+            frequency = "Per burst ($images images)",
+            isAvoidable = true,
+            reason = "The burst path copies every YUV image so the camera buffer can be returned at once.",
+            latencyImpactMs = Float.NaN, // not timed
+            measured = true
+        )
+    }
 
     fun auditPipeline(
         previewWidth: Int = 1920,
@@ -117,17 +144,17 @@ object ZeroCopyAuditor {
         )
 
         val totalCopied = copies.filter { it.frequency.contains("Per Frame") }.sumOf { it.bytesMoved }
-        val status = if (totalCopied == 0L) "PASS" else "PARTIAL"
+        val design = if (totalCopied == 0L) "NO_COPIES_EXPECTED" else "COPIES_EXPECTED"
 
-        val summary = if (status == "PASS") {
-            "Zero CPU copies in real-time camera preview and analysis stream. Surfaces and HardwareBuffers are zero-copy memory mapped."
+        val summary = if (totalCopied == 0L) {
+            "Design expectation only: no per-frame CPU copy is expected in this configuration. Not measured; zero-copy NOT_PROVEN."
         } else {
-            "Partial zero-copy: Surface preview is zero-copy; analysis frame ingestion currently copies ${totalCopied / 1024} KB per frame when converting to JVM FramePlane."
+            "Design expectation only: about ${totalCopied / 1024} KB per frame is expected to be copied into JVM FramePlanes. Not measured."
         }
 
         return ZeroCopyAuditReport(
-            zeroCopyDesignStatus = "PASS",
-            actualHardwarePathStatus = status,
+            zeroCopyDesignStatus = design,
+            actualHardwarePathStatus = "NOT_MEASURED",
             copies = copies,
             totalPerFrameCopiedBytes = totalCopied,
             summary = summary

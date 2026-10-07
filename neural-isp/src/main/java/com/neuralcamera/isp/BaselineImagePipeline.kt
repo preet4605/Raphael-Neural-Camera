@@ -28,7 +28,8 @@ class BaselineImagePipeline(
         frames: List<CameraFrame>,
         targetWidth: Int,
         targetHeight: Int,
-        requestNeuralAcceleration: Boolean
+        requestNeuralAcceleration: Boolean,
+        options: ProcessingOptions
     ): ProcessedImageResult {
         require(frames.isNotEmpty()) { "Cannot process empty frames list" }
 
@@ -40,8 +41,10 @@ class BaselineImagePipeline(
             val pixelCount = width * height
             require(lumaPlanes.all { it.width == width && it.height == height }) { "All frames must have the same size" }
 
-            // 1. Temporal fusion: sharpest frame as reference, tile alignment, motion-robust noise-aware merge.
-            val referenceIndex = FrameAnalysis.sharpestIndex(lumaPlanes)
+            // 1. Temporal fusion: best-ranked frame as reference (quality engine), tile alignment, motion-robust
+            // noise-aware merge.
+            val reference = ReferenceSelector.select(lumaPlanes)
+            val referenceIndex = reference.index
             val refFrame = frames[referenceIndex]
             val radiometry = Radiometry(blackLevel = 0.0, whiteLevel = 255.0)
             val temporalFrames = lumaPlanes.map { Frame(it, radiometry) }
@@ -88,15 +91,34 @@ class BaselineImagePipeline(
                 GuardAction.KEEP_RECONSTRUCTED, GuardAction.DISCARD_NEURAL_STAGE -> reconstructedLuma
             }
 
-            // Convert to RGB master buffer. Luma is the merged result; colour comes from the reference frame's own
-            // chroma planes when the frame has them (chroma is NOT temporally merged), otherwise the output is gray.
-            val chroma = ChromaExtractor.toFullRes(refFrame)
+            // Colour: the frames' own chroma planes, merged along the luma motion when every frame has them, and
+            // following the Reality Guard's decision for luma (reference chroma when it reverted the merge, the same
+            // blend when it diluted it). Without chroma planes on the reference the output is gray.
+            val refChroma = ChromaExtractor.halfRes(refFrame)
+            val halves = frames.map { ChromaExtractor.halfRes(it) }
+            val chromaMerge = if (options.mergeChroma && refChroma != null && frames.size > 1 && halves.all { it != null && it.width == refChroma.width && it.height == refChroma.height }) {
+                ChromaMerge.merge(halves.map { it!! }, referenceIndex, merge.fields, TemporalMerge.defaultThreads())
+            } else null
+            val chromaMerged = chromaMerge != null && guardDecision.action != GuardAction.REVERT_TO_ORIGINAL
+            val halfChroma = when {
+                refChroma == null -> null
+                chromaMerge == null || guardDecision.action == GuardAction.REVERT_TO_ORIGINAL -> refChroma
+                guardDecision.action == GuardAction.BLEND_WITH_ORIGINAL -> {
+                    val r = guardDecision.blendRatio
+                    val m = chromaMerge.chroma
+                    ChromaExtractor.HalfChroma(m.width, m.height,
+                        IntArray(m.cb.size) { Math.round(m.cb[it] * r + refChroma.cb[it] * (1 - r)) },
+                        IntArray(m.cr.size) { Math.round(m.cr[it] * r + refChroma.cr[it] * (1 - r)) })
+                }
+                else -> chromaMerge.chroma
+            }
+            val chroma = halfChroma?.let { ChromaExtractor.upsample(it, width, height) }
             val masterRgb = ByteArray(pixelCount * 3)
             for (i in 0 until pixelCount) {
                 val luma = finalLuma[i].toInt() and 0xFF
                 // S-curve subtle contrast enhancement (classical photographic tone curve), applied to luma only
                 val normalized = luma / 255.0
-                val y = normalized * normalized * (3 - 2 * normalized) * 255.0
+                val y = if (options.contrastCurve) normalized * normalized * (3 - 2 * normalized) * 255.0 else luma.toDouble()
                 val rgbIdx = i * 3
                 if (chroma == null) {
                     val g = y.toInt().coerceIn(0, 255).toByte()
@@ -132,8 +154,18 @@ class BaselineImagePipeline(
                 ),
                 isNeuralAccelerated = false,
                 isColour = chroma != null,
+                chromaMerged = chromaMerged,
                 temporalStats = merge.frameStats,
-                appliedPipelineName = "Classical baseline ISP (tile-aligned, noise-aware, motion-robust temporal merge on luma; chroma from the reference frame)"
+                referenceFallback = reference.allFramesRejected,
+                // Never report the merge as applied when the guard replaced or diluted it.
+                appliedPipelineName = "Classical baseline ISP (tile-aligned, noise-aware, motion-robust temporal merge on luma; " +
+                    (if (chromaMerged) "chroma merged along the luma motion" else "chroma from the reference frame") +
+                    (if (options.contrastCurve) "; contrast curve)" else "; no contrast curve)") +
+                    when (guardDecision.action) {
+                        GuardAction.REVERT_TO_ORIGINAL -> "; merge DISCARDED by Reality Guard, output is the unmerged reference frame"
+                        GuardAction.BLEND_WITH_ORIGINAL -> "; merge blended with the reference frame at ratio ${"%.2f".format(guardDecision.blendRatio)}"
+                        else -> ""
+                    } + (if (reference.allFramesRejected) "; ${reference.note}" else "")
             )
         }
 
