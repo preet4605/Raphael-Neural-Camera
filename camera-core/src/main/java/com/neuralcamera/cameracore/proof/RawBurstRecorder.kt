@@ -198,6 +198,9 @@ class RawBurstRecorder(private val context: Context) {
             }
 
             // The burst.
+            val shadingMapOn = chars.get(CameraCharacteristics.STATISTICS_INFO_AVAILABLE_LENS_SHADING_MAP_MODES)
+                ?.contains(CameraMetadata.STATISTICS_LENS_SHADING_MAP_MODE_ON) == true
+            event("INFO lensShadingMap=${if (shadingMapOn) "ON" else "UNAVAILABLE"}")
             val requests = (0 until n).map { index ->
                 device!!.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply {
                     addTarget(imageReader.surface)
@@ -205,6 +208,8 @@ class RawBurstRecorder(private val context: Context) {
                     if (chosen.third != CameraMetadata.SENSOR_PIXEL_MODE_DEFAULT) {
                         set(CaptureRequest.SENSOR_PIXEL_MODE, chosen.third)
                     }
+                    // Lets DngCreator embed the shading gain map (OpcodeList2) for the offline RAW front end. RAW pixels are unaffected.
+                    if (shadingMapOn) set(CaptureRequest.STATISTICS_LENS_SHADING_MAP_MODE, CameraMetadata.STATISTICS_LENS_SHADING_MAP_MODE_ON)
                 }.build()
             }
             val sequenceDone = CountDownLatch(1)
