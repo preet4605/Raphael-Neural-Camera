@@ -4,6 +4,9 @@ import com.neuralcamera.isp.dng.DngPreview
 import com.neuralcamera.isp.dng.DngReader
 import com.neuralcamera.isp.encode.DngMetadata
 import com.neuralcamera.isp.encode.DngWriter
+import com.neuralcamera.isp.color.OutputSpace
+import com.neuralcamera.isp.color.ToneParams
+import com.neuralcamera.isp.encode.IccProfile
 import com.neuralcamera.isp.encode.JpegEncoder
 import com.neuralcamera.isp.raw.RawFrontEnd
 import com.neuralcamera.isp.temporal.BayerFrame
@@ -44,7 +47,9 @@ object BurstMergeTool {
         val maxFrames: Int?,
         val noiseOverride: NoiseModel?,
         val defects: Boolean,
-        val shading: Boolean
+        val shading: Boolean,
+        val displayP3: Boolean,
+        val tone: ToneParams
     )
 
     private fun parse(args: List<String>): Options {
@@ -62,7 +67,8 @@ object BurstMergeTool {
         }
         return Options(
             input, output, reference, crop, value("--threads")?.toInt() ?: TemporalMerge.defaultThreads(),
-            value("--max-frames")?.toInt(), noise, "--no-defects" !in args, "--no-shading" !in args
+            value("--max-frames")?.toInt(), noise, "--no-defects" !in args, "--no-shading" !in args, "--display-p3" in args,
+            ToneParams(exposure = value("--exposure")?.toDouble() ?: 1.0)
         )
     }
 
@@ -71,7 +77,7 @@ object BurstMergeTool {
             parse(args)
         } catch (e: Exception) {
             out.println("error: ${e.message}")
-            out.println("usage: --input <dir> [--output <dir>] [--reference auto|N] [--crop x,y,w,h] [--threads N] [--max-frames N] [--noise shot,read] [--no-defects] [--no-shading]")
+            out.println("usage: --input <dir> [--output <dir>] [--reference auto|N] [--crop x,y,w,h] [--threads N] [--max-frames N] [--noise shot,read] [--no-defects] [--no-shading] [--display-p3] [--exposure X]")
             return 2
         }
         val files = (o.input.listFiles { f -> f.isFile && f.name.endsWith(".dng", ignoreCase = true) } ?: emptyArray())
@@ -164,10 +170,10 @@ object BurstMergeTool {
         writePng(File(o.output, "merged_preview.png"), DngPreview.render(result.mosaic, ref.cfa, ref.asShotNeutral), width, height)
 
         val transform = ref.toColorTransform()
-        val refColor = ColorPipeline.render(refNorm, ref.cfa, transform)
-        val mergedColor = ColorPipeline.render(result.mosaic, ref.cfa, transform)
-        writePng8(File(o.output, "reference_color.png"), refColor.srgb8, width, height)
-        writePng8(File(o.output, "merged_color.png"), mergedColor.srgb8, width, height)
+        val refColor = ColorPipeline.render(refNorm, ref.cfa, transform, o.tone)
+        val mergedColor = ColorPipeline.render(result.mosaic, ref.cfa, transform, o.tone)
+        writePng8(File(o.output, "reference_color.png"), refColor.rgb8, width, height)
+        writePng8(File(o.output, "merged_color.png"), mergedColor.rgb8, width, height)
 
         // Real encoders: a linear merged DNG (needs the source's colour calibration) and a JPEG of the colour render.
         val dngStatus: Any = try {
@@ -188,7 +194,14 @@ object BurstMergeTool {
         } catch (e: Exception) {
             "failed: ${e.message}"
         }
-        File(o.output, "merged_color.jpg").writeBytes(JpegEncoder.encodeRgb(mergedColor.srgb8, width, height, quality = 92))
+        File(o.output, "merged_color.jpg").writeBytes(JpegEncoder.encodeRgb(mergedColor.rgb8, width, height, quality = 92))
+        // Wide-gamut variant: the same render in Display P3 primaries, tagged with a matching ICC profile.
+        if (o.displayP3) {
+            val p3 = ColorPipeline.render(result.mosaic, ref.cfa, ref.toColorTransform(OutputSpace.DISPLAY_P3), o.tone)
+            File(o.output, "merged_color_p3.jpg").writeBytes(
+                JpegEncoder.encodeRgb(p3.rgb8, width, height, quality = 92, iccProfile = IccProfile.forOutput(OutputSpace.DISPLAY_P3))
+            )
+        }
 
         fun greenSigma(norm: FloatPlane): Double {
             val pw = width / 2

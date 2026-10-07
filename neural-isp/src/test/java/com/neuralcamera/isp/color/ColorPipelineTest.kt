@@ -129,7 +129,7 @@ class ColorPipelineTest {
         val cfa = CfaPattern.RGGB
         val t = ColorTransform.from(doubleArrayOf(0.5, 1.0, 0.6), null, null)
         val res = ColorPipeline.render(mosaicOf(cfa), cfa, t)
-        assertEquals(w * h * 3, res.srgb8.size)
+        assertEquals(w * h * 3, res.rgb8.size)
         assertEquals(ColorTransform.Source.WHITE_BALANCE_ONLY, res.transformSource)
     }
 }

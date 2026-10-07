@@ -56,9 +56,10 @@ class DngRawImage(
     val forwardMatrix2: DoubleArray? = null,
     val calibrationIlluminant2: Int? = null
 ) {
-    fun toColorTransform() = com.neuralcamera.isp.color.ColorTransform.fromCalibration(
-        asShotNeutral, colorMatrix1, colorMatrix2, forwardMatrix1, forwardMatrix2, calibrationIlluminant1, calibrationIlluminant2
-    )
+    fun toColorTransform(output: com.neuralcamera.isp.color.OutputSpace = com.neuralcamera.isp.color.OutputSpace.SRGB) =
+        com.neuralcamera.isp.color.ColorTransform.fromCalibration(
+            asShotNeutral, colorMatrix1, colorMatrix2, forwardMatrix1, forwardMatrix2, calibrationIlluminant1, calibrationIlluminant2, output
+        )
 
     /** The same image with a cropped mosaic. The shading map is dropped: it spans the uncropped area. */
     fun withMosaic(newMosaic: U16Plane) = DngRawImage(

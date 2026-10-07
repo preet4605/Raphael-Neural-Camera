@@ -133,7 +133,8 @@ object JpegEncoder {
     }
 
     /** @param rgb interleaved R,G,B bytes */
-    fun encodeRgb(rgb: ByteArray, width: Int, height: Int, quality: Int = 92, exif: JpegExif? = null): ByteArray {
+    /** @param iccProfile embedded as APP2 ICC_PROFILE (e.g. [IccProfile.forOutput] for Display P3 pixels); null = untagged (sRGB by convention) */
+    fun encodeRgb(rgb: ByteArray, width: Int, height: Int, quality: Int = 92, exif: JpegExif? = null, iccProfile: ByteArray? = null): ByteArray {
         require(rgb.size == width * height * 3) { "rgb buffer has ${rgb.size} bytes for ${width}x$height" }
         val n = width * height
         val y = ByteArray(n)
@@ -147,10 +148,11 @@ object JpegEncoder {
             cb[i] = (128 - 0.168736 * r - 0.331264 * g + 0.5 * b).roundToInt().coerceIn(0, 255).toByte()
             cr[i] = (128 + 0.5 * r - 0.418688 * g - 0.081312 * b).roundToInt().coerceIn(0, 255).toByte()
         }
-        return encode(arrayOf(y, cb, cr), 3, width, height, quality, exif)
+        return encode(arrayOf(y, cb, cr), 3, width, height, quality, exif, iccProfile)
     }
 
-    private fun encode(components: Array<ByteArray>, count: Int, width: Int, height: Int, quality: Int, exif: JpegExif?): ByteArray {
+    private fun encode(components: Array<ByteArray>, count: Int, width: Int, height: Int, quality: Int, exif: JpegExif?, icc: ByteArray? = null): ByteArray {
+        require(icc == null || icc.size <= 65519) { "ICC profiles larger than one APP2 segment are not supported" }
         require(width in 1..65535 && height in 1..65535) { "image size out of JPEG range" }
         val lumaQ = scaledTable(LUMA_Q, quality)
         val chromaQ = scaledTable(CHROMA_Q, quality)
@@ -167,6 +169,10 @@ object JpegEncoder {
         if (exif != null) {
             val tiff = ExifBlock.build(exif)
             if (tiff != null) { marker(0xE1); u16(2 + 6 + tiff.size); out.write("Exif".toByteArray()); out.write(0); out.write(0); out.write(tiff) }
+        }
+        if (icc != null) {
+            // APP2 "ICC_PROFILE\0", chunk 1 of 1.
+            marker(0xE2); u16(2 + 12 + 2 + icc.size); out.write("ICC_PROFILE".toByteArray()); out.write(0); out.write(1); out.write(1); out.write(icc)
         }
         for (t in 0 until (if (count == 1) 1 else 2)) {
             marker(0xDB); u16(67); out.write(t)

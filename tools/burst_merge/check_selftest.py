@@ -74,4 +74,21 @@ if png.shape == jp.shape:
     mse = np.mean((png - jp) ** 2)
     print(f"JPEG vs PNG render PSNR: {10 * np.log10(255 ** 2 / max(mse, 1e-9)):.1f} dB")
     assert mse < 40, "JPEG should closely match the 8-bit render"
+# Display P3 JPEG: Pillow (LittleCMS) must read its ICC profile and, converted to sRGB, match the sRGB render.
+from io import BytesIO
+from PIL import ImageCms
+p3 = Image.open(out / "merged_color_p3.jpg")
+icc = p3.info.get("icc_profile")
+assert icc, "merged_color_p3.jpg has no ICC profile"
+prof = ImageCms.ImageCmsProfile(BytesIO(icc))
+assert "Display P3" in ImageCms.getProfileDescription(prof), ImageCms.getProfileDescription(prof)
+as_srgb = np.asarray(ImageCms.profileToProfile(p3, prof, ImageCms.createProfile("sRGB"), outputMode="RGB"), dtype=np.float64)
+# Compare where both renders are plain colour-space changes: below the highlight shoulder (applied to the brightest
+# channel, which differs between primaries) and above the clamp at zero. The run uses --exposure 0.4 for that.
+lin = np.where(jp <= 0.04045 * 255, jp / 255 / 12.92, ((jp / 255 + 0.055) / 1.055) ** 2.4)
+mid = (lin.max(axis=2) < 0.6) & (lin.min(axis=2) > 0.02)
+assert mid.mean() > 0.5, f"too few mid-tone pixels to compare ({mid.mean():.2f})"
+mse_p3 = np.mean(((as_srgb - jp) ** 2)[mid])
+print(f"P3 JPEG -> sRGB (LittleCMS) vs sRGB JPEG on {mid.mean():.0%} mid-tone pixels: PSNR {10 * np.log10(255 ** 2 / max(mse_p3, 1e-9)):.1f} dB")
+assert mse_p3 < 40, "the P3 render, colour-managed to sRGB, should match the sRGB render"
 print("selftest OK")
