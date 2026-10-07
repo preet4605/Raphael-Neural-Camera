@@ -61,6 +61,10 @@ end on a synthetic burst with vignetting, an embedded gain map and fixed defecti
 - **Never run on real data.** Lens shading and defective pixels are corrected only as synthesized; fixed-pattern
   noise, rolling shutter and optical stabilization motion are not modelled. Whether the OnePlus 15 reports a shading
   map, and what its DNG gain maps look like, is NOT_TESTED. Real bursts may need parameter changes.
+- **Gyro seeding is ready but unfed.** `TileAligner.align` and both merges take optional per-frame `AlignmentSeed`s
+  (they add candidates; the zero-motion search still runs), and `GyroAlignmentSeed` turns gyro samples into a seed.
+  Nothing records gyro samples next to a burst yet, and the gyro-to-image axis mapping must be measured on the device
+  (#11 D7); until it is, seeds have confidence 0 and are not used. Unseeded range: about +-32 px on a 4-level pyramid.
 - **Translation per tile only.** Rotation, strong parallax and subject motion between frames become high residual and
   are rejected (less denoising there), not modelled.
 - **No IMU prior** yet; the search range is the pyramid's: `coarseRadius * 2^(levels-1)` pixels (about +-32 px for a

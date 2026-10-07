@@ -153,3 +153,64 @@ object MotionEstimator {
     /** Horizontal field of view helper for tests and profile sanity checks. */
     fun horizontalFovRad(focalLengthPx: Double, widthPx: Int): Double = 2 * atan(widthPx / (2 * focalLengthPx))
 }
+
+/**
+ * How rotation about the gyro axes moves the image: shift = focal * M * (rx, ry, rz), with M a 2x3 matrix of -1/0/1
+ * (row-major, rows = image x, image y). It depends on sensor orientation, lens facing and the device's axis conventions,
+ * so it has to be measured on the device (#11 D7: known rotation vs measured image shift). Nothing here derives it.
+ */
+class GyroImageAxes(val m: IntArray, val verifiedOnDevice: Boolean) {
+    init {
+        require(m.size == 6 && m.all { it in -1..1 }) { "a 2x3 matrix of -1, 0 or 1" }
+    }
+}
+
+/** A global inter-frame translation from the gyro, in output pixels, and how far to trust it. */
+data class GyroSeedEstimate(val dxPx: Double, val dyPx: Double, val confidence: Double, val reasons: List<String>) {
+    val usable: Boolean get() = confidence >= GyroAlignmentSeed.MIN_CONFIDENCE
+}
+
+/**
+ * Gyro-derived alignment seed for one alternate frame relative to the reference. Returns null when the gyro does not
+ * cover the interval or no axis mapping is known: missing data is never turned into zero motion. Roll is not a
+ * translation; when it would move the frame corners by more than [ROLL_LIMIT_PX] the seed is down-weighted.
+ */
+object GyroAlignmentSeed {
+    const val MIN_CONFIDENCE = 0.5
+    const val ROLL_LIMIT_PX = 2.0
+
+    fun estimate(
+        gyro: List<GyroSample>,
+        reference: RollingShutterModel,
+        frame: RollingShutterModel,
+        stabilization: StabilizationContext,
+        focalLengthPx: Double,
+        axes: GyroImageAxes?,
+        imageWidthPx: Int,
+        imageHeightPx: Int
+    ): GyroSeedEstimate? {
+        if (axes == null) return null
+        val r = GyroIntegrator.integrate(
+            gyro, minOf(reference.rowMidExposureNs(reference.rows / 2), frame.rowMidExposureNs(frame.rows / 2)),
+            maxOf(reference.rowMidExposureNs(reference.rows / 2), frame.rowMidExposureNs(frame.rows / 2))
+        ) ?: return null
+        // Rotation from the reference to this frame (integration ran forward in time).
+        val sign = if (frame.rowMidExposureNs(frame.rows / 2) >= reference.rowMidExposureNs(reference.rows / 2)) 1.0 else -1.0
+        val v = doubleArrayOf(r.x * sign, r.y * sign, r.z * sign)
+        val f = focalLengthPx * stabilization.cropScale
+        fun component(row: Int) = f * kotlin.math.tan(axes.m[row * 3] * v[0] + axes.m[row * 3 + 1] * v[1] + axes.m[row * 3 + 2] * v[2])
+
+        val reasons = ArrayList<String>()
+        var confidence = 1.0
+        if (!axes.verifiedOnDevice) { confidence = 0.0; reasons.add("gyro-to-image axis mapping not verified on this device") }
+        if (stabilization.eisActive != false) { confidence *= 0.3; reasons.add("EIS active or unknown: output geometry is warped") }
+        if (stabilization.oisActive != false && !stabilization.oisSamplesAvailable) {
+            confidence *= 0.5; reasons.add("OIS active or unknown without OIS samples: lens shift not subtracted")
+        }
+        // Roll about the optical axis (the axis no image row of M uses) turns the frame; corners move by angle * radius.
+        val rollAxis = (0 until 3).firstOrNull { c -> axes.m[c] == 0 && axes.m[3 + c] == 0 }
+        val rollPx = rollAxis?.let { abs(v[it]) * 0.5 * sqrt(imageWidthPx.toDouble() * imageWidthPx + imageHeightPx.toDouble() * imageHeightPx) }
+        if (rollPx != null && rollPx > ROLL_LIMIT_PX) { confidence *= 0.5; reasons.add("roll moves the corners by %.1f px; a translation seed fits the centre only".format(java.util.Locale.ROOT, rollPx)) }
+        return GyroSeedEstimate(component(0), component(1), confidence, reasons)
+    }
+}

@@ -352,16 +352,20 @@ object TemporalMerge {
         noise: NoiseModel,
         mergeParams: MergeParams = MergeParams(),
         alignParams: AlignParams = AlignParams(),
-        threads: Int = defaultThreads()
+        threads: Int = defaultThreads(),
+        /** Per frame index (the reference's entry is ignored), in frame pixels; null entries align unseeded. */
+        seeds: List<AlignmentSeed?>? = null
     ): MergeResult {
+        require(seeds == null || seeds.size == frames.size) { "one seed slot per frame" }
         require(frames.isNotEmpty()) { "no frames" }
         require(referenceIndex in frames.indices) { "reference index out of range" }
         val ref = frames[referenceIndex]
         val alts = frames.filterIndexed { i, _ -> i != referenceIndex }
+        val altSeeds = seeds?.filterIndexed { i, _ -> i != referenceIndex }
         val refProxy = AlignmentProxy.of(ref)
         val aligner = TileAligner(alignParams)
         val fields = arrayOfNulls<MotionField>(alts.size)
-        Parallel.run(alts.size, threads) { index, _ -> fields[index] = aligner.align(refProxy, AlignmentProxy.of(alts[index])) }
+        Parallel.run(alts.size, threads) { index, _ -> fields[index] = aligner.align(refProxy, AlignmentProxy.of(alts[index]), altSeeds?.get(index)) }
         return TemporalMerger.merge(ref, alts, fields.map { it!! }, noise, mergeParams, threads)
     }
 }

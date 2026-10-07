@@ -87,6 +87,20 @@ object AlignmentProxy {
     }
 }
 
+/**
+ * Global translation hint for an alternate frame, in pixels of the plane passed to [TileAligner.align] and with the
+ * [MotionField] sign convention (e.g. from the gyro). It only adds candidates: the zero-motion search still runs and the
+ * lower matching cost wins per tile, so a wrong seed is taken only where it matches better (possible on repetitive
+ * texture). A missing seed changes nothing.
+ */
+data class AlignmentSeed(val dx: Float, val dy: Float) {
+    init {
+        require(dx.isFinite() && dy.isFinite()) { "seed must be finite" }
+    }
+
+    fun scaled(factor: Float) = AlignmentSeed(dx * factor, dy * factor)
+}
+
 data class AlignParams(
     /** Integer search radius at the coarsest pyramid level (in that level's pixels). */
     val coarseRadius: Int = 4,
@@ -104,7 +118,7 @@ data class AlignParams(
  */
 class TileAligner(private val params: AlignParams = AlignParams()) {
 
-    fun align(ref: FloatPlane, alt: FloatPlane): MotionField {
+    fun align(ref: FloatPlane, alt: FloatPlane, seed: AlignmentSeed? = null): MotionField {
         require(ref.width == alt.width && ref.height == alt.height) { "frames must have the same size" }
         val levels = AlignmentProxy.levelsFor(ref.width, ref.height)
         val refPyr = AlignmentProxy.pyramid(ref, levels)
@@ -112,7 +126,8 @@ class TileAligner(private val params: AlignParams = AlignParams()) {
 
         var field: MotionField? = null
         for (level in levels - 1 downTo 0) {
-            field = matchLevel(refPyr[level], altPyr[level], field)
+            val levelSeed = seed?.scaled(1f / (1 shl level))?.let { Math.round(it.dx) to Math.round(it.dy) }
+            field = matchLevel(refPyr[level], altPyr[level], field, levelSeed)
         }
         val finest = field!!
         refineSubPixel(refPyr[0], altPyr[0], finest)
@@ -120,7 +135,7 @@ class TileAligner(private val params: AlignParams = AlignParams()) {
         return finest
     }
 
-    private fun matchLevel(ref: FloatPlane, alt: FloatPlane, coarse: MotionField?): MotionField {
+    private fun matchLevel(ref: FloatPlane, alt: FloatPlane, coarse: MotionField?, seed: Pair<Int, Int>?): MotionField {
         val tx = TileGrid.tilesFor(ref.width)
         val ty = TileGrid.tilesFor(ref.height)
         val dx = FloatArray(tx * ty)
@@ -135,16 +150,19 @@ class TileAligner(private val params: AlignParams = AlignParams()) {
                 var best = Float.POSITIVE_INFINITY
                 if (coarse == null) {
                     val r = params.coarseRadius
-                    for (vy in -r..r) for (vx in -r..r) {
+                    // Full search around zero, and around the seed when it lies outside that window.
+                    val centres = listOfNotNull(0 to 0, seed?.takeIf { (sx, sy) -> abs(sx) > r || abs(sy) > r })
+                    for ((cx, cy) in centres) for (vy in cy - r..cy + r) for (vx in cx - r..cx + r) {
                         val c = tileCost(ref, alt, x0, y0, vx, vy)
                         if (c < best || (c == best && abs(vx) + abs(vy) < abs(bestX) + abs(bestY))) {
                             best = c; bestX = vx; bestY = vy
                         }
                     }
                 } else {
-                    // Candidates: the parent tiles' vectors scaled up, and zero.
+                    // Candidates: the parent tiles' vectors scaled up, zero, and the seed.
                     val cands = LinkedHashSet<Long>()
                     cands.add(pack(0, 0))
+                    if (seed != null) cands.add(pack(seed.first, seed.second))
                     for (py in intArrayOf(ky / 2, (ky + 1) / 2)) for (px in intArrayOf(kx / 2, (kx + 1) / 2)) {
                         val ci = coarse.index(px.coerceIn(0, coarse.tilesX - 1), py.coerceIn(0, coarse.tilesY - 1))
                         if (coarse.cost[ci].isFinite()) cands.add(pack(Math.round(coarse.dx[ci] * 2), Math.round(coarse.dy[ci] * 2)))

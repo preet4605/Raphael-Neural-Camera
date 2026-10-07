@@ -1,6 +1,7 @@
 package com.neuralcamera.capture.motion
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -78,5 +79,45 @@ class MotionModelTest {
         val e = MotionEstimator.estimate(constantGyro(0.1, 0, 100_000_000L), cur, prev, noEis, 1000.0)
         // Mid rows 33 ms apart: 0.1 rad/s * 0.033 s = 0.0033 rad -> 3.3 px at f = 1000 px.
         assertEquals(3.3, e.interFrameShiftPx!!, 0.01)
+    }
+
+    // Synthetic mapping for the tests: yaw (gyro y) moves the image in x, pitch (gyro x) in y, z is roll.
+    private val axes = GyroImageAxes(intArrayOf(0, 1, 0, 1, 0, 0), verifiedOnDevice = true)
+    private fun frameAt(startNs: Long) = RollingShutterModel(startNs, 10_000_000L, 20_000_000L, 3000)
+
+    @Test
+    fun gyroSeedIsTheRotationBetweenMidExposuresInPixels() {
+        val gyro = (0L..200_000_000L step 1_000_000L).map { GyroSample(it, 0.02, 0.05, 0.0) }
+        val ref = frameAt(10_000_000L); val alt = frameAt(43_333_333L)
+        val dt = (alt.rowMidExposureNs(1500) - ref.rowMidExposureNs(1500)) / 1e9
+        val est = GyroAlignmentSeed.estimate(gyro, ref, alt, noEis, 3000.0, axes, 4000, 3000)!!
+        assertEquals(3000.0 * kotlin.math.tan(0.05 * dt), est.dxPx, 1e-6)
+        assertEquals(3000.0 * kotlin.math.tan(0.02 * dt), est.dyPx, 1e-6)
+        assertTrue(est.usable)
+        // Reference after the alternate frame: the seed flips sign.
+        val back = GyroAlignmentSeed.estimate(gyro, alt, ref, noEis, 3000.0, axes, 4000, 3000)!!
+        assertEquals(-est.dxPx, back.dxPx, 1e-9)
+    }
+
+    @Test
+    fun noMappingOrNoGyroCoverageGivesNoSeedNotZero() {
+        val gyro = (0L..30_000_000L step 1_000_000L).map { GyroSample(it, 0.0, 0.05, 0.0) }
+        assertNull(GyroAlignmentSeed.estimate(gyro, frameAt(10_000_000L), frameAt(43_333_333L), noEis, 3000.0, axes, 4000, 3000))
+        val full = (0L..200_000_000L step 1_000_000L).map { GyroSample(it, 0.0, 0.05, 0.0) }
+        assertNull(GyroAlignmentSeed.estimate(full, frameAt(10_000_000L), frameAt(43_333_333L), noEis, 3000.0, null, 4000, 3000))
+    }
+
+    @Test
+    fun unverifiedAxesEisAndRollAreNotTrusted() {
+        val gyro = (0L..200_000_000L step 1_000_000L).map { GyroSample(it, 0.0, 0.05, 0.0) }
+        val unverified = GyroAlignmentSeed.estimate(gyro, frameAt(10_000_000L), frameAt(43_333_333L), noEis, 3000.0,
+            GyroImageAxes(axes.m, verifiedOnDevice = false), 4000, 3000)!!
+        assertFalse(unverified.usable)
+        val eis = GyroAlignmentSeed.estimate(gyro, frameAt(10_000_000L), frameAt(43_333_333L), noEis.copy(eisActive = true), 3000.0, axes, 4000, 3000)!!
+        assertFalse(eis.usable)
+        val rolling = (0L..200_000_000L step 1_000_000L).map { GyroSample(it, 0.0, 0.05, 0.1) } // ~3.3 mrad roll: ~8 px at the corners
+        val roll = GyroAlignmentSeed.estimate(rolling, frameAt(10_000_000L), frameAt(43_333_333L), noEis, 3000.0, axes, 4000, 3000)!!
+        assertEquals(0.5, roll.confidence, 1e-12)
+        assertTrue(roll.reasons.any { it.startsWith("roll moves the corners") })
     }
 }

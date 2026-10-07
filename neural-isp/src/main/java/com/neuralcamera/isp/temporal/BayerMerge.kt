@@ -39,8 +39,11 @@ object BayerTemporalMerge {
         noise: List<NoiseModel>,
         mergeParams: MergeParams = MergeParams(),
         alignParams: AlignParams = AlignParams(),
-        threads: Int = TemporalMerge.defaultThreads()
+        threads: Int = TemporalMerge.defaultThreads(),
+        /** Per frame index (the reference's entry is ignored), in mosaic pixels; null entries align unseeded. */
+        seeds: List<AlignmentSeed?>? = null
     ): BayerMergeResult {
+        require(seeds == null || seeds.size == frames.size) { "one seed slot per frame" }
         require(frames.isNotEmpty()) { "no frames" }
         require(referenceIndex in frames.indices) { "reference index out of range" }
         require(noise.size == 4) { "one noise model per CFA position is required" }
@@ -56,7 +59,10 @@ object BayerTemporalMerge {
         val refProxy = lumaProxy(planes[referenceIndex])
         val aligner = TileAligner(alignParams)
         val fieldSlots = arrayOfNulls<MotionField>(altIndexes.size)
-        Parallel.run(altIndexes.size, threads) { index, _ -> fieldSlots[index] = aligner.align(refProxy, lumaProxy(planes[altIndexes[index]])) }
+        // Alignment runs on the half-resolution plane proxy, so mosaic-pixel seeds are halved.
+        Parallel.run(altIndexes.size, threads) { index, _ ->
+            fieldSlots[index] = aligner.align(refProxy, lumaProxy(planes[altIndexes[index]]), seeds?.get(altIndexes[index])?.scaled(0.5f))
+        }
         val fields = fieldSlots.map { it!! }
 
         val out = FloatPlane(w, h)
