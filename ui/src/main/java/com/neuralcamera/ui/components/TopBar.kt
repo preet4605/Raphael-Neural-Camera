@@ -20,7 +20,7 @@ fun TopBar(
     modifier: Modifier = Modifier,
     flashState: String = "AUTO",
     aspectRatio: String = "4:3",
-    rawEnabled: Boolean = true,
+    rawEnabled: Boolean = false, // the camera UI captures YUV; RAW capture exists only in the Gate 1 probe
     onSettingsClick: () -> Unit = {}
 ) {
     Row(

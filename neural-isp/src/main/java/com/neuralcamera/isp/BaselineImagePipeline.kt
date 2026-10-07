@@ -133,7 +133,13 @@ class BaselineImagePipeline(
                 isNeuralAccelerated = false,
                 isColour = chroma != null,
                 temporalStats = merge.frameStats,
-                appliedPipelineName = "Classical baseline ISP (tile-aligned, noise-aware, motion-robust temporal merge on luma; chroma from the reference frame)"
+                // Never report the merge as applied when the guard replaced or diluted it.
+                appliedPipelineName = "Classical baseline ISP (tile-aligned, noise-aware, motion-robust temporal merge on luma; chroma from the reference frame)" +
+                    when (guardDecision.action) {
+                        GuardAction.REVERT_TO_ORIGINAL -> "; merge DISCARDED by Reality Guard, output is the unmerged reference frame"
+                        GuardAction.BLEND_WITH_ORIGINAL -> "; merge blended with the reference frame at ratio ${"%.2f".format(guardDecision.blendRatio)}"
+                        else -> ""
+                    }
             )
         }
 

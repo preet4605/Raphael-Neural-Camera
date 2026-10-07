@@ -7,7 +7,6 @@ import com.neuralcamera.deviceprofiles.LensFacing
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VideoPipelineTest {
@@ -40,17 +39,17 @@ class VideoPipelineTest {
             val pipeline = StandardVideoPipeline()
             pipeline.prepare(VideoRecordingConfig())
 
-            var enhancedCount = 0
+            var keyframes = 0
             for (i in 1L..30L) {
                 val res = pipeline.processFrame(createFrame(i))
                 assertFalse(res.dropped)
-                if (res.neuralEnhanced) {
-                    enhancedCount++
-                }
+                // No enhancement stage exists, so no frame may claim it was enhanced.
+                assertFalse(res.neuralEnhanced)
+                if (res.isEnhancementKeyframe) keyframes++
             }
 
-            // Rule 24: Frame 15 and 30 are enhanced (2 out of 30 frames), not all 30!
-            assertEquals(2, enhancedCount)
+            // Rule 24: only frames 15 and 30 are eligible keyframes (2 out of 30), never every frame.
+            assertEquals(2, keyframes)
             pipeline.finalizeRecording()
         }
     }

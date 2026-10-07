@@ -120,22 +120,28 @@ class MainActivity : ComponentActivity() {
     )
 
     /** Inserts a JPEG into the system gallery (Pictures/Raphael); no storage permission is needed on API 30+. */
-    private fun saveToGallery(name: String, jpeg: ByteArray): String? = try {
-        val values = android.content.ContentValues().apply {
-            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "$name.jpg")
-            put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Raphael")
-            put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
-        }
-        val uri = contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-        if (uri == null) null else {
-            contentResolver.openOutputStream(uri)?.use { it.write(jpeg) }
+    private fun saveToGallery(name: String, jpeg: ByteArray): String? {
+        var uri: android.net.Uri? = null
+        return try {
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "$name.jpg")
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Raphael")
+                put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+            }
+            val target = contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                ?: return null
+            uri = target
+            val stream = contentResolver.openOutputStream(target) ?: throw java.io.IOException("no output stream for $target")
+            stream.use { it.write(jpeg) }
             values.clear(); values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
-            contentResolver.update(uri, values, null, null)
+            contentResolver.update(target, values, null, null)
             "Pictures/Raphael/$name.jpg"
+        } catch (e: Exception) {
+            // Remove the pending row so a failed write never leaves a broken, half-written gallery entry.
+            uri?.let { runCatching { contentResolver.delete(it, null, null) } }
+            null
         }
-    } catch (e: Exception) {
-        null
     }
 
     private suspend fun captureAndSave(): String {

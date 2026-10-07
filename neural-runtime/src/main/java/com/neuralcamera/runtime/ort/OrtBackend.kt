@@ -195,12 +195,17 @@ class OrtBackend(
                 profileError = "${t.javaClass.simpleName}: ${t.message}"
             }
         }
-        val libs = readProcMaps()?.let { ProcMaps.mappedLibraries(it) } ?: emptyList()
+        val maps = readProcMaps()
+        val libs = maps?.let { ProcMaps.mappedLibraries(it) } ?: emptyList()
+        val libPaths = maps?.let { ProcMaps.mappedLibraryPaths(it) } ?: emptyList()
         val counts = profileSummary?.providerCounts ?: emptyMap()
 
         val details = linkedMapOf<String, Any?>(
             "execution" to config.execution.name,
             "ortVersion" to env().version,
+            // Which QNN copy is loaded (app-bundled 2.42.0 vs vendor 2.37.4) is read from these paths; informational,
+            // the checker's verdict does not depend on it.
+            "mappedLibraryPaths" to libPaths,
             "modelResource" to config.modelResource,
             "modelSha256" to modelSha256,
             "sessionCreated" to true,

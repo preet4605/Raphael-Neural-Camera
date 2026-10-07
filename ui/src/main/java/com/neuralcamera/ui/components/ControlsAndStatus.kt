@@ -76,7 +76,7 @@ fun ProControlSurface(
 @Composable
 fun NeuralStatus(
     modifier: Modifier = Modifier,
-    backendName: String = "QNN HTP NPU",
+    backendName: String = "NONE (no backend verified)",
     isAccelerated: Boolean = true
 ) {
     Row(

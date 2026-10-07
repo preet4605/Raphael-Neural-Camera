@@ -45,6 +45,19 @@ class MediaRepositoryTest {
     }
 
     @Test
+    fun savingTheSameIdTwiceFailsAndKeepsTheOriginal() {
+        runBlocking {
+            val dir = tempFolder.newFolder("dup")
+            val repo = OriginalMasterMediaRepository(dir)
+            val item = repo.saveMediaBundle("shot", byteArrayOf(1), byteArrayOf(2), "{}", "{}", "jpg")
+            val second = runCatching { repo.saveMediaBundle("shot", byteArrayOf(9, 9), byteArrayOf(9), "{}", "{}", "jpg") }
+            assertTrue(second.exceptionOrNull() is java.io.IOException)
+            assertEquals(1, File(item.originalFilePath).length())
+            assertTrue(File(dir, "shot.manifest").exists())
+        }
+    }
+
+    @Test
     fun testStorageSeparationModelsIntegrity() {
         val original = OriginalCapture(
             captureId = "cap_01",
