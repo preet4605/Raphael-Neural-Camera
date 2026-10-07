@@ -218,7 +218,8 @@ object BurstMergeTool {
             "blackLevels" to ref.blackLevels.toList(),
             "noise" to mapOf("source" to noiseSource, "perCfaPosition" to noise.map { mapOf("shot" to it.shot, "read" to it.read) }),
             "mergeStats" to result.frameStats.map {
-                mapOf("altIndex" to it.altIndex, "meanWeight" to it.meanWeight, "tilesRejected" to it.tilesRejected, "tilesTotal" to it.tilesTotal, "meanAbsResidual" to it.meanAbsResidual)
+                mapOf("altIndex" to it.altIndex, "meanWeight" to it.meanWeight, "tilesRejected" to it.tilesRejected, "tilesTotal" to it.tilesTotal, "meanAbsResidual" to it.meanAbsResidual,
+                    "tilesBelowHalfWeight" to it.tileWeights?.fractionBelow(0.5f))
             },
             "noiseSigmaGreen" to mapOf("reference" to sigmaRef, "merged" to sigmaMerged, "ratio" to if (sigmaRef > 0) sigmaMerged / sigmaRef else null),
             "seconds" to mapOf("total" to (System.nanoTime() - t0) / 1e9, "merge" to mergeSeconds),

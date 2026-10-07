@@ -84,7 +84,8 @@ object BayerTemporalMerge {
                 meanWeight = statsPerPlane.map { it[ai].meanWeight }.average(),
                 tilesRejected = statsPerPlane.sumOf { it[ai].tilesRejected } / 4,
                 tilesTotal = statsPerPlane.sumOf { it[ai].tilesTotal } / 4,
-                meanAbsResidual = statsPerPlane.map { it[ai].meanAbsResidual }.filter { !it.isNaN() }.average()
+                meanAbsResidual = statsPerPlane.map { it[ai].meanAbsResidual }.filter { !it.isNaN() }.average(),
+                tileWeights = TileWeights.meanOf(statsPerPlane.map { it[ai].tileWeights!! })
             )
         }
         return BayerMergeResult(out, stats)
