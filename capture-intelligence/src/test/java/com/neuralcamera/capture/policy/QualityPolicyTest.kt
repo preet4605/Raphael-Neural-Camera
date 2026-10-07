@@ -53,4 +53,26 @@ class QualityPolicyTest {
         assertNull(why)
         assertEquals(QualityPolicyId.INSTANT, QualityPolicies.resolve(QualityPolicyId.INSTANT, DeviceConditions(5, 5, true)).first.id)
     }
+
+    @Test
+    fun decisionKeepsPlannedFramesUnlessAnOverrideShrinksThem() {
+        val cool = DeviceConditions(thermalStatus = 0, batteryPercent = 80, powerSaveMode = false)
+        val hot = DeviceConditions(thermalStatus = 3, batteryPercent = 80, powerSaveMode = false)
+        val unknown = DeviceConditions(thermalStatus = null, batteryPercent = null, powerSaveMode = null)
+        val m = com.neuralcamera.capture.CameraShootingMode.MASTER
+
+        val normal = QualityPolicies.decide(12, m, cool)
+        assertEquals(QualityPolicyId.MAXIMUM, normal.policy.id)
+        assertEquals(12, normal.frames)
+        assertNull(normal.override)
+
+        val throttled = QualityPolicies.decide(12, m, hot)
+        assertEquals(QualityPolicyId.THERMAL, throttled.policy.id)
+        assertEquals(3, throttled.frames)
+        assertTrue(throttled.override!!.contains("thermal"))
+
+        // Fewer planned frames than the cap stay as planned; unmeasured conditions never trigger an override.
+        assertEquals(2, QualityPolicies.decide(2, m, hot).frames)
+        assertNull(QualityPolicies.decide(8, com.neuralcamera.capture.CameraShootingMode.AUTO, unknown).override)
+    }
 }

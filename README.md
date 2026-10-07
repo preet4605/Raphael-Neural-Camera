@@ -37,7 +37,7 @@ FULL_PIPELINE_PROVEN=FALSE
 - Image pipeline: `BaselineImagePipeline` merges 8-bit luma with tile alignment and a motion-robust, noise-aware merge (synthetic-data validated only); colour is the reference frame's own chroma (not merged), grayscale when a frame has no chroma planes. A RAW colour path (demosaic, colour matrix, tone curve) exists in `color/` but is not wired to capture; no HDR rendering yet.
 - Encoding: pure-Kotlin JPEG and DNG encoders exist (`:neural-isp` `encode/`, validated with libraw, Pillow and ImageIO on synthetic data). The app saves JPEGs (colour from the reference frame's chroma when present, with luma merged); a DNG needs RAW frames (Gate 1), and there is no HEIF/Ultra HDR encoder.
 - Reality Guard: a heuristic comparison of reconstructed vs. original luma. It is not hallucination detection and not cryptographic provenance.
-- Zero-copy, IMU sync accuracy, thermal behavior and latency: none measured.
+- Zero-copy, IMU sync accuracy, thermal behavior and latency: none measured. The app does read the system thermal status, battery level and power-save mode; a SEVERE thermal status or power saving caps the burst size, and the decision is saved with each photo (untested on the device).
 
 ---
 

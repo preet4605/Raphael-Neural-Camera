@@ -24,7 +24,7 @@ data class MergeFacts(
 object CaptureProvenance {
     const val INTENDED_MERGE = "tile-aligned noise-aware temporal merge (luma)"
 
-    fun forBurst(mediaId: String, burst: BurstCapture, merge: MergeFacts, policy: String? = null): ProvenanceRecord {
+    fun forBurst(mediaId: String, burst: BurstCapture, merge: MergeFacts, policy: String? = null, policyOverride: String? = null): ProvenanceRecord {
         val stages = listOf(
             ProvenanceRecord.recordOf(captureOutcome(burst), ContentOrigin.CAPTURED),
             mergeRecord(merge),
@@ -38,7 +38,7 @@ object CaptureProvenance {
             stages = stages,
             capturedWithoutConvergence = burst.result.capturedWithoutConvergence,
             policy = policy,
-            policyOverride = null
+            policyOverride = policyOverride
         )
     }
 

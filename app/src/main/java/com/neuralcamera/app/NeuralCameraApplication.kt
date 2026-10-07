@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Context
 import android.hardware.SensorManager
 import android.hardware.camera2.CameraManager
+import android.os.BatteryManager
+import android.os.PowerManager
 import com.neuralcamera.benchmarks.InMemoryTelemetryLogger
 import com.neuralcamera.benchmarks.StandardBenchmarkRunner
 import com.neuralcamera.cameracore.DeviceCapabilityResolver
@@ -11,6 +13,7 @@ import com.neuralcamera.cameracore.LogicalToPhysicalCameraMap
 import com.neuralcamera.cameracore.RealCamera2Controller
 import com.neuralcamera.cameracore.SensorTimelineSynchronizer
 import com.neuralcamera.capture.UniversalCapturePlanner
+import com.neuralcamera.capture.policy.DeviceConditions
 import com.neuralcamera.deviceprofiles.InMemoryDeviceProfileRepository
 import com.neuralcamera.deviceprofiles.PredefinedDeviceProfiles
 import com.neuralcamera.gallery.OriginalMasterMediaRepository
@@ -23,6 +26,7 @@ import com.neuralcamera.runtime.StandardComputeBudgetManager
 import com.neuralcamera.runtime.StandardMemoryManager
 import com.neuralcamera.runtime.StandardModelRegistry
 import com.neuralcamera.runtime.StandardThermalManager
+import com.neuralcamera.runtime.ThermalState
 import java.io.File
 
 class NeuralCameraApplication : Application() {
@@ -44,6 +48,24 @@ class NeuralCameraApplication : Application() {
     lateinit var sensorSynchronizer: SensorTimelineSynchronizer
     lateinit var capabilityResolver: DeviceCapabilityResolver
     lateinit var logicalToPhysicalMap: LogicalToPhysicalCameraMap
+
+    private var powerManager: PowerManager? = null
+    private var batteryManager: BatteryManager? = null
+    /** Latest PowerManager thermal status (THERMAL_STATUS_NONE..SHUTDOWN), from the system listener. */
+    @Volatile private var thermalStatus: Int? = null
+
+    /** Current device conditions for capture policy; fields the system does not report stay null (never assumed). */
+    fun deviceConditions(): DeviceConditions = DeviceConditions(
+        thermalStatus = thermalStatus,
+        batteryPercent = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)?.takeIf { it in 0..100 },
+        powerSaveMode = powerManager?.isPowerSaveMode
+    )
+
+    private fun onThermalStatus(status: Int) {
+        thermalStatus = status
+        thermalManager.updateThermalState(ThermalState.entries.firstOrNull { it.level == status } ?: ThermalState.NONE)
+        telemetryLogger.logEvent("THERMAL_STATUS", mapOf("status" to status))
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -97,6 +119,14 @@ class NeuralCameraApplication : Application() {
         sensorSynchronizer = SensorTimelineSynchronizer(sensorManager)
         capabilityResolver = DeviceCapabilityResolver(this, cameraManager)
         logicalToPhysicalMap = LogicalToPhysicalCameraMap(cameraManager)
+
+        // 9. Device conditions: real thermal status from the system drives the thermal manager and capture policy.
+        powerManager = getSystemService(PowerManager::class.java)
+        batteryManager = getSystemService(BatteryManager::class.java)
+        powerManager?.let { pm ->
+            onThermalStatus(pm.currentThermalStatus)
+            pm.addThermalStatusListener(mainExecutor) { onThermalStatus(it) }
+        }
 
         telemetryLogger.logEvent("APP_INITIALIZED", mapOf(
             "device" to activeProfile.deviceModel,

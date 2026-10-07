@@ -1,5 +1,6 @@
 package com.neuralcamera.capture.policy
 
+import com.neuralcamera.capture.CameraShootingMode
 import com.neuralcamera.models.execution.ContentOrigin
 
 /*
@@ -78,4 +79,23 @@ object QualityPolicies {
         }
         return of(requested) to null
     }
+
+    /** Default policy per shooting mode (design default; per-mode behaviour beyond this is Phase Q work). */
+    fun requestedFor(mode: CameraShootingMode): QualityPolicyId = when (mode) {
+        CameraShootingMode.MASTER -> QualityPolicyId.MAXIMUM
+        CameraShootingMode.AUTO, CameraShootingMode.PRO, CameraShootingMode.AUTHENTIC -> QualityPolicyId.BALANCED
+    }
+
+    /**
+     * Applies device conditions to a planned burst. Without an override the planner's frame count stands; with a
+     * thermal or power override it is capped at the override policy's maximum (overrides only ever shrink work).
+     */
+    fun decide(plannedFrames: Int, mode: CameraShootingMode, conditions: DeviceConditions): PolicyDecision {
+        require(plannedFrames >= 1) { "at least one planned frame" }
+        val (policy, override) = resolve(requestedFor(mode), conditions)
+        val frames = if (override != null) minOf(plannedFrames, policy.maxFrames) else plannedFrames
+        return PolicyDecision(policy, override, frames)
+    }
 }
+
+data class PolicyDecision(val policy: SchedulingPolicy, val override: String?, val frames: Int)

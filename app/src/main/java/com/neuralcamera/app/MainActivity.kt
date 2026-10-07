@@ -161,10 +161,12 @@ class MainActivity : ComponentActivity() {
         // 1. Plan capture using UniversalCapturePlanner
         val (lux, luxSource) = sceneLux()
         val plan = planFor(uiState.activeMode, lux)
+        // Thermal/battery overrides can only shrink the burst; the decision is saved with the photo.
+        val decision = com.neuralcamera.capture.policy.QualityPolicies.decide(plan.temporalFrameCount, uiState.activeMode, app.deviceConditions())
 
         // 2. Acquire real hardware frames
         // Precapture, 3A convergence and AE/AWB lock run before the burst; partial or unconverged captures are reported.
-        val burst = app.cameraController.captureBurst(plan.temporalFrameCount)
+        val burst = app.cameraController.captureBurst(decision.frames)
         check(burst.usable) { "Capture ${burst.result.state}: ${burst.result.reason}; nothing was saved." }
         val frames = burst.frames
         val caveats = burst.caveats()
@@ -201,7 +203,8 @@ class MainActivity : ComponentActivity() {
                 referenceFallback = result.referenceFallback,
                 colour = result.isColour
             ),
-            policy = uiState.activeMode.name
+            policy = decision.policy.id.name,
+            policyOverride = decision.override
         )
 
         // 4. Encode and save non-destructively. The master is a colour JPEG when the frames had chroma planes (luma is
@@ -227,7 +230,7 @@ class MainActivity : ComponentActivity() {
                 mediaId = mediaId,
                 originalBytes = original,
                 masterBytes = master,
-                captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}, "requested": ${burst.result.requested}, "capture_state": "${burst.result.state}", "convergence": "${burst.convergence ?: "NOT_CHECKED"}", "captured_without_convergence": ${burst.result.capturedWithoutConvergence}, "ae_lock_requested": ${burst.lockRequested}, "ae_locked_frames": ${burst.lockedFrames ?: "null"}, "attempts": ${burst.result.attempts}, "scene_lux": ${"%.1f".format(java.util.Locale.ROOT, lux)}, "scene_lux_source": "$luxSource", "motion_source": "PLACEHOLDER"}""",
+                captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}, "requested": ${burst.result.requested}, "capture_state": "${burst.result.state}", "convergence": "${burst.convergence ?: "NOT_CHECKED"}", "captured_without_convergence": ${burst.result.capturedWithoutConvergence}, "ae_lock_requested": ${burst.lockRequested}, "ae_locked_frames": ${burst.lockedFrames ?: "null"}, "attempts": ${burst.result.attempts}, "scene_lux": ${"%.1f".format(java.util.Locale.ROOT, lux)}, "scene_lux_source": "$luxSource", "motion_source": "PLACEHOLDER", "planned_frames": ${plan.temporalFrameCount}, "policy": "${decision.policy.id}", "policy_override": ${decision.override?.let { com.neuralcamera.gallery.provenance.ProvenanceRecord.q(it) } ?: "null"}}""",
                 processingMetadataJson = """{"pipeline": ${com.neuralcamera.gallery.provenance.ProvenanceRecord.q(result.appliedPipelineName)}, "guard": "${result.realityGuardDecision.action}", "colour": ${result.isColour}, "provenance": ${provenance.toJson()}}""",
                 format = "jpg"
             )
