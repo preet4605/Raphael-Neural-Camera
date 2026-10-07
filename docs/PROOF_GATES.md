@@ -17,6 +17,8 @@ advancing a phase.
 
 The last three may become `TRUE` only after all of the first three are `TRUE`.
 
+This table is the single source of flag state. CI (`tools/verify_architecture.sh`) fails if any flag name appears in source code, or if a row says `TRUE` without `proof/<flag in lower case>/checker_output.txt` containing the checker's own `<FLAG>=TRUE` line.
+
 ## Gate 1: full-resolution third-party RAW burst
 
 Fixed test: main rear camera, `RAW_SENSOR`, 8192x6144, at least 8 consecutive frames, no duplicates,
