@@ -27,6 +27,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var app: NeuralCameraApplication
     private var activePreviewSurface: Surface? = null
     private var uiState by mutableStateOf(CameraUIState())
+    /** PRO stops inside the active camera's reported ranges; empty when it has no manual-sensor support. */
+    private var isoStops: List<Int> = emptyList()
+    private var shutterStops: List<Long> = emptyList()
 
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -52,12 +55,13 @@ class MainActivity : ComponentActivity() {
                 state = uiState,
                 onModeSelected = { selectedMode ->
                     val frames = planFor(selectedMode).temporalFrameCount
+                    val behaviour = com.neuralcamera.capture.policy.ModeBehaviours.of(selectedMode)
                     uiState = uiState.copy(
                         activeMode = selectedMode,
                         statusMessage = null,
-                        infoMessage = "${selectedMode.name}: $frames frame${if (frames == 1) "" else "s"} per shot " +
-                            "(a mode currently only sets the burst length; exposure stays on camera auto)"
+                        infoMessage = "${selectedMode.name}: $frames frame${if (frames == 1) "" else "s"} per shot; ${behaviour.summary}"
                     )
+                    if (selectedMode == com.neuralcamera.capture.CameraShootingMode.PRO) refreshProControls()
                     app.telemetryLogger.logEvent("MODE_CHANGED", mapOf("mode" to selectedMode.name, "frames" to frames))
                 },
                 onZoomSelected = { zoom ->
@@ -103,9 +107,51 @@ class MainActivity : ComponentActivity() {
                 },
                 onToggleDiagnostics = {
                     uiState = uiState.copy(showDiagnostics = !uiState.showDiagnostics)
+                },
+                onManualExposureToggled = {
+                    uiState.proExposure?.let { uiState = uiState.copy(proExposure = it.copy(manual = !it.manual)) }
+                },
+                onIsoStep = { delta ->
+                    uiState.proExposure?.let { uiState = uiState.copy(proExposure = it.copy(isoIndex = (it.isoIndex + delta).coerceIn(0, isoStops.size - 1))) }
+                },
+                onShutterStep = { delta ->
+                    uiState.proExposure?.let { uiState = uiState.copy(proExposure = it.copy(shutterIndex = (it.shutterIndex + delta).coerceIn(0, shutterStops.size - 1))) }
                 }
             )
         }
+    }
+
+    /**
+     * PRO controls from the active camera's manual-sensor ranges, seeded from the preview's current auto exposure (else
+     * ISO 400, 1/60 s). Hidden (null) when the camera does not report manual-sensor support.
+     */
+    private fun refreshProControls() {
+        val limits = runCatching { app.cameraController.exposureLimits() }.getOrNull()
+        isoStops = limits?.let { com.neuralcamera.cameracore.threea.ManualStops.iso(it.sensitivityRange) } ?: emptyList()
+        shutterStops = limits?.let { com.neuralcamera.cameracore.threea.ManualStops.shutterNs(it.exposureTimeRangeNs) } ?: emptyList()
+        if (isoStops.isEmpty() || shutterStops.isEmpty()) {
+            uiState = uiState.copy(proExposure = null)
+            return
+        }
+        val seed = app.cameraController.latestPreviewExposure
+        val stops = com.neuralcamera.cameracore.threea.ManualStops
+        val isoIndex = stops.nearest(isoStops.map { it.toLong() }, (seed?.sensitivityIso ?: 400).toLong())
+        val shutterIndex = stops.nearest(shutterStops, seed?.exposureTimeNs ?: 16_666_667L)
+        uiState = uiState.copy(
+            proExposure = com.neuralcamera.ui.ProExposureControls(
+                isoStops.map { it.toString() }, isoIndex, shutterStops.map(stops::shutterLabel), shutterIndex,
+                manual = uiState.proExposure?.manual ?: false
+            )
+        )
+    }
+
+    /** The manual setting to request for this shot: only in PRO with manual exposure on. */
+    private fun manualExposureForShot(): com.neuralcamera.cameracore.threea.ExposureSetting? {
+        val pro = uiState.proExposure ?: return null
+        if (uiState.activeMode != com.neuralcamera.capture.CameraShootingMode.PRO || !pro.manual) return null
+        val t = shutterStops.getOrNull(pro.shutterIndex) ?: return null
+        val iso = isoStops.getOrNull(pro.isoIndex) ?: return null
+        return com.neuralcamera.cameracore.threea.ExposureSetting(t, iso, 0.0, clamped = false)
     }
 
     /**
@@ -167,7 +213,8 @@ class MainActivity : ComponentActivity() {
 
         // 2. Acquire real hardware frames
         // Precapture, 3A convergence and AE/AWB lock run before the burst; partial or unconverged captures are reported.
-        val burst = app.cameraController.captureBurst(decision.frames)
+        val manual = manualExposureForShot()
+        val burst = app.cameraController.captureBurst(decision.frames, manual = manual)
         check(burst.usable) { "Capture ${burst.result.state}: ${burst.result.reason}; nothing was saved." }
         val frames = burst.frames
         val caveats = burst.caveats()
@@ -233,7 +280,7 @@ class MainActivity : ComponentActivity() {
                 mediaId = mediaId,
                 originalBytes = original,
                 masterBytes = master,
-                captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}, "requested": ${burst.result.requested}, "capture_state": "${burst.result.state}", "convergence": "${burst.convergence ?: "NOT_CHECKED"}", "captured_without_convergence": ${burst.result.capturedWithoutConvergence}, "ae_lock_requested": ${burst.lockRequested}, "ae_locked_frames": ${burst.lockedFrames ?: "null"}, "attempts": ${burst.result.attempts}, "scene_lux": ${"%.1f".format(java.util.Locale.ROOT, lux)}, "scene_lux_source": "$luxSource", "motion_source": "PLACEHOLDER", "planned_frames": ${plan.temporalFrameCount}, "policy": "${decision.policy.id}", "policy_override": ${decision.override?.let { com.neuralcamera.gallery.provenance.ProvenanceRecord.q(it) } ?: "null"}, "heap_copied_bytes_measured": ${burst.copy?.bytesMoved ?: 0}}""",
+                captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}, "requested": ${burst.result.requested}, "capture_state": "${burst.result.state}", "convergence": "${burst.convergence ?: "NOT_CHECKED"}", "captured_without_convergence": ${burst.result.capturedWithoutConvergence}, "ae_lock_requested": ${burst.lockRequested}, "ae_locked_frames": ${burst.lockedFrames ?: "null"}, "attempts": ${burst.result.attempts}, "scene_lux": ${"%.1f".format(java.util.Locale.ROOT, lux)}, "scene_lux_source": "$luxSource", "motion_source": "PLACEHOLDER", "planned_frames": ${plan.temporalFrameCount}, "policy": "${decision.policy.id}", "policy_override": ${decision.override?.let { com.neuralcamera.gallery.provenance.ProvenanceRecord.q(it) } ?: "null"}, "heap_copied_bytes_measured": ${burst.copy?.bytesMoved ?: 0}, "manual_exposure": ${manual?.let { com.neuralcamera.gallery.provenance.ProvenanceRecord.q(com.neuralcamera.cameracore.threea.ManualFrameCheck.summary(it, burst.manualChecks)) } ?: "null"}}""",
                 processingMetadataJson = """{"mode": "${behaviour.mode}", "mode_behaviour": ${com.neuralcamera.gallery.provenance.ProvenanceRecord.q(behaviour.summary)}, "pipeline": ${com.neuralcamera.gallery.provenance.ProvenanceRecord.q(result.appliedPipelineName)}, "guard": "${result.realityGuardDecision.action}", "colour": ${result.isColour}, "provenance": ${provenance.toJson()}}""",
                 format = "jpg"
             )
@@ -272,6 +319,7 @@ class MainActivity : ComponentActivity() {
                     else -> null
                 }
                 uiState = uiState.copy(statusMessage = error, supportedZoom = if (error == null) app.cameraController.supportedZoomRange() else null)
+                if (error == null) refreshProControls()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

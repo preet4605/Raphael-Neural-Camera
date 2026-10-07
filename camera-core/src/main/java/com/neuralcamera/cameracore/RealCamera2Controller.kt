@@ -103,6 +103,20 @@ class RealCamera2Controller(
     }
 
     /** Zoom range the active camera accepts, or null when the camera is closed or has no zoom-ratio control. */
+    /**
+     * Manual exposure limits of the active camera, or null when it does not list MANUAL_SENSOR or omits a range.
+     * Never defaulted: no limits means PRO shows no manual exposure controls.
+     */
+    fun exposureLimits(): com.neuralcamera.cameracore.threea.ExposureLimits? {
+        val id = activeCameraId ?: return null
+        val chars = cameraManager.getCameraCharacteristics(id)
+        val caps = chars.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES) ?: return null
+        if (CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR !in caps) return null
+        val t = chars.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE) ?: return null
+        val s = chars.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE) ?: return null
+        return com.neuralcamera.cameracore.threea.ExposureLimits(t.lower..t.upper, s.lower..s.upper)
+    }
+
     fun supportedZoomRange(): ClosedFloatingPointRange<Float>? {
         val id = activeCameraId ?: return null
         val r = cameraManager.getCameraCharacteristics(id).get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE) ?: return null
@@ -336,7 +350,12 @@ class RealCamera2Controller(
      * YUV, not RAW (the HAL has already applied its own noise reduction), so this is not the Gate 1 RAW burst.
      * On-device behaviour (convergence time, lock stability, recovery) is NOT_TESTED.
      */
-    suspend fun captureBurst(frameCount: Int, minUsableFrames: Int = 1): BurstCapture = mutex.withLock {
+    suspend fun captureBurst(
+        frameCount: Int,
+        minUsableFrames: Int = 1,
+        /** Manual exposure for the burst frames (AE off); every frame's result is checked against it. Null = auto. */
+        manual: com.neuralcamera.cameracore.threea.ExposureSetting? = null
+    ): BurstCapture = mutex.withLock {
         val size = burstSize
         val cameraId = activeCameraId
         if (cameraDevice == null || captureSession == null || burstReader == null || size == null || cameraId == null) {
@@ -344,7 +363,7 @@ class RealCamera2Controller(
         }
         val count = YuvBurstSupport.framesWithinBudget(frameCount, size, BURST_COPY_BUDGET_BYTES)
         val chars = cameraManager.getCameraCharacteristics(cameraId)
-        val executor = BurstExecutor(chars, count)
+        val executor = BurstExecutor(chars, count, manual)
         val policy = OrchestrationPolicy(requestedFrames = count, minUsableFrames = minUsableFrames.coerceIn(1, count))
 
         stateMachine.transitionTo(CameraState.CAPTURING)
@@ -365,9 +384,12 @@ class RealCamera2Controller(
                     metadata = md
                 )
             }
+            val checks = if (manual == null) emptyList() else executor.lastAttempt.filter { it.timestampNs in kept }
+                .mapNotNull { exposureRecordOf(it.result) }.map { com.neuralcamera.cameracore.threea.ManualFrameCheck.of(manual, it) }
             BurstCapture(
                 frames, result, executor.convergence, executor.lockedFrames, executor.lockRequested,
-                copy = ZeroCopyAuditor.measuredBurstCopy(copiedBytes.get(), copiedImages.get())
+                copy = ZeroCopyAuditor.measuredBurstCopy(copiedBytes.get(), copiedImages.get()),
+                manual = manual, manualChecks = checks
             )
         } finally {
             activeCollector?.finish()
@@ -381,7 +403,11 @@ class RealCamera2Controller(
     }
 
     /** Executes orchestrator commands on the open session; runs with [mutex] held by [captureBurst]. */
-    private inner class BurstExecutor(private val chars: CameraCharacteristics, private val frames: Int) : CaptureCommandExecutor {
+    private inner class BurstExecutor(
+        private val chars: CameraCharacteristics,
+        private val frames: Int,
+        private val manual: com.neuralcamera.cameracore.threea.ExposureSetting?
+    ) : CaptureCommandExecutor {
         /** Fixed-focus lenses report minimum focus distance 0 and never leave AF INACTIVE. */
         private val hasAf = (chars.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE) ?: 0f) > 0f
         private val aeLockAvailable = chars.get(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE) == true
@@ -462,6 +488,12 @@ class RealCamera2Controller(
                 device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply {
                     addTarget(reader.surface)
                     applyAuto3A(lock3A = lockRequested)
+                    if (manual != null) {
+                        // AE off: the sensor uses exactly these values (the HAL may still round; each result is checked).
+                        set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+                        set(CaptureRequest.SENSOR_EXPOSURE_TIME, manual.exposureTimeNs)
+                        set(CaptureRequest.SENSOR_SENSITIVITY, manual.iso)
+                    }
                 }.build()
             }
             session.captureBurst(requests, object : CameraCaptureSession.CaptureCallback() {
