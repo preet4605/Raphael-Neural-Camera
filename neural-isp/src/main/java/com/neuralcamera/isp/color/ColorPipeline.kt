@@ -16,7 +16,8 @@ class ColorResult(
 /**
  * Normalized linear Bayer mosaic (for example the temporal merge output) to a display image:
  * demosaic, camera-to-output colour transform (sRGB or Display P3, white balance included), tone mapping, sRGB-curve encoding.
- * Baseline colour processing only: no lens-shading, denoise, sharpening, local tone mapping or gamut handling beyond a clamp.
+ * Baseline colour processing only: no lens-shading, denoise, sharpening or local tone mapping. Out-of-gamut colours are
+ * mapped by [GamutMapping] and highlights desaturate in the shoulder ([ToneParams]).
  */
 object ColorPipeline {
     fun render(mosaic: FloatPlane, cfa: CfaPattern, transform: ColorTransform, tone: ToneParams = ToneParams()): ColorResult {
@@ -27,6 +28,6 @@ object ColorPipeline {
             transform.apply(d[i], d[i + 1], d[i + 2], d, i)
             i += 3
         }
-        return ColorResult(rgb.width, rgb.height, ToneMapper.toSrgb8(rgb, tone), rgb, transform.source, transform.output)
+        return ColorResult(rgb.width, rgb.height, ToneMapper.toSrgb8(rgb, tone, transform.output), rgb, transform.source, transform.output)
     }
 }

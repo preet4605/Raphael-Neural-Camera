@@ -84,7 +84,7 @@ prof = ImageCms.ImageCmsProfile(BytesIO(icc))
 assert "Display P3" in ImageCms.getProfileDescription(prof), ImageCms.getProfileDescription(prof)
 as_srgb = np.asarray(ImageCms.profileToProfile(p3, prof, ImageCms.createProfile("sRGB"), outputMode="RGB"), dtype=np.float64)
 # Compare where both renders are plain colour-space changes: below the highlight shoulder (applied to the brightest
-# channel, which differs between primaries) and above the clamp at zero. The run uses --exposure 0.4 for that.
+# channel, which differs between primaries) and away from sRGB gamut mapping (min channel 0). The run uses --exposure 0.4 for that.
 lin = np.where(jp <= 0.04045 * 255, jp / 255 / 12.92, ((jp / 255 + 0.055) / 1.055) ** 2.4)
 mid = (lin.max(axis=2) < 0.6) & (lin.min(axis=2) > 0.02)
 assert mid.mean() > 0.5, f"too few mid-tone pixels to compare ({mid.mean():.2f})"
