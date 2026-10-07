@@ -8,9 +8,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
 import org.junit.Test
-import java.io.ByteArrayInputStream
 import java.io.File
-import javax.imageio.ImageIO
 import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.sin
@@ -33,10 +31,9 @@ class EncodersTest {
         val gray = ByteArray(w * h) { scene(it % w, it / w, 0).toByte() }
         val jpeg = JpegEncoder.encodeGray(gray, w, h, quality = 95)
         assertEquals(0xFF, jpeg[0].toInt() and 255); assertEquals(0xD8, jpeg[1].toInt() and 255)
-        val img = ImageIO.read(ByteArrayInputStream(jpeg))
-        assertNotNull(img)
+        val img = checkNotNull(JdkDecodedImage.read(jpeg))
         assertEquals(w, img.width); assertEquals(h, img.height)
-        val decoded = IntArray(w * h) { img.raster.getSample(it % w, it / w, 0) }
+        val decoded = IntArray(w * h) { img.sample(it % w, it / w, 0) }
         val p = psnr(IntArray(w * h) { gray[it].toInt() and 255 }, decoded)
         assertTrue("PSNR $p", p > 38.0)
     }
@@ -47,12 +44,11 @@ class EncodersTest {
         val h = 48
         val rgb = ByteArray(w * h * 3) { scene((it / 3) % w, (it / 3) / w, it % 3).toByte() }
         val jpeg = JpegEncoder.encodeRgb(rgb, w, h, quality = 95)
-        val img = ImageIO.read(ByteArrayInputStream(jpeg))
-        assertNotNull(img)
+        val img = checkNotNull(JdkDecodedImage.read(jpeg))
         val a = IntArray(w * h * 3) { rgb[it].toInt() and 255 }
         val b = IntArray(w * h * 3)
         for (y in 0 until h) for (x in 0 until w) {
-            val p = img.getRGB(x, y)
+            val p = img.rgb(x, y)
             b[(y * w + x) * 3] = (p shr 16) and 255; b[(y * w + x) * 3 + 1] = (p shr 8) and 255; b[(y * w + x) * 3 + 2] = p and 255
         }
         val p = psnr(a, b)
@@ -71,7 +67,7 @@ class EncodersTest {
     fun exifFieldsAreReadableByAnIndependentParser() {
         val gray = ByteArray(16 * 16) { 100 }
         val jpeg = JpegEncoder.encodeGray(gray, 16, 16, exif = JpegExif(orientation = 6, exposureTimeSeconds = 1.0 / 120, iso = 400, software = "Raphael"))
-        assertNotNull(ImageIO.read(ByteArrayInputStream(jpeg)))
+        assertNotNull(JdkDecodedImage.read(jpeg))
         // Locate APP1 and parse the TIFF block with the same TIFF reader used for DNGs.
         var i = 2
         while (i < jpeg.size) {
