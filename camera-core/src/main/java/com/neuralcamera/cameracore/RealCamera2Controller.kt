@@ -86,11 +86,16 @@ class RealCamera2Controller(
      */
     private val previewResults = Channel<TotalCaptureResult>(capacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
+    /** 3A facts of the most recent preview result; null before the first one. Read by capture planning. */
+    @Volatile var latestPreviewExposure: ExposureRecord? = null
+        private set
+
     private val previewCallback = object : CameraCaptureSession.CaptureCallback() {
         override fun onCaptureCompleted(session: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
             val timestamp = result.get(CaptureResult.SENSOR_TIMESTAMP) ?: 0L
             associator.onCaptureResultArrived(timestamp, result) { _, _ -> }
             previewResults.trySend(result)
+            exposureRecordOf(result)?.let { latestPreviewExposure = it }
         }
     }
 

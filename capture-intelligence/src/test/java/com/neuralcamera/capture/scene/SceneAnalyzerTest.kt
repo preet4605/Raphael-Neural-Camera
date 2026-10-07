@@ -59,4 +59,16 @@ class SceneAnalyzerTest {
         val a = SceneAnalyzer.assess(LumaStats.of(flat(118), 64, 64), 10_000_000L, 100, 1.8f, MotionClass.STILL)
         assertTrue(a.semanticSignals.all { it.availability == SignalAvailability.NOT_AVAILABLE && it.value == null })
     }
+
+    @Test
+    fun luxFromAutoExposureFollowsEv100AndRefusesMissingInputs() {
+        // f/1.8, 1/100 s, ISO 100: N^2/t = 324, so EV100 = log2(324) and lux = 2.5 * 324.
+        val lux = SceneAnalyzer.estimatedLuxFromAutoExposure(10_000_000L, 100, 1.8f)!!
+        org.junit.Assert.assertEquals(810.0, lux, 0.5)
+        // Doubling ISO at the same shutter means half the light.
+        org.junit.Assert.assertEquals(405.0, SceneAnalyzer.estimatedLuxFromAutoExposure(10_000_000L, 200, 1.8f)!!, 0.5)
+        org.junit.Assert.assertNull(SceneAnalyzer.estimatedLuxFromAutoExposure(null, 100, 1.8f))
+        org.junit.Assert.assertNull(SceneAnalyzer.estimatedLuxFromAutoExposure(10_000_000L, 0, 1.8f))
+        org.junit.Assert.assertNull(SceneAnalyzer.estimatedLuxFromAutoExposure(10_000_000L, 100, null))
+    }
 }

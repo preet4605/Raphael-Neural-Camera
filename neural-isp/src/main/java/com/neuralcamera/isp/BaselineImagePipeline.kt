@@ -40,8 +40,10 @@ class BaselineImagePipeline(
             val pixelCount = width * height
             require(lumaPlanes.all { it.width == width && it.height == height }) { "All frames must have the same size" }
 
-            // 1. Temporal fusion: sharpest frame as reference, tile alignment, motion-robust noise-aware merge.
-            val referenceIndex = FrameAnalysis.sharpestIndex(lumaPlanes)
+            // 1. Temporal fusion: best-ranked frame as reference (quality engine), tile alignment, motion-robust
+            // noise-aware merge.
+            val reference = ReferenceSelector.select(lumaPlanes)
+            val referenceIndex = reference.index
             val refFrame = frames[referenceIndex]
             val radiometry = Radiometry(blackLevel = 0.0, whiteLevel = 255.0)
             val temporalFrames = lumaPlanes.map { Frame(it, radiometry) }
@@ -139,7 +141,7 @@ class BaselineImagePipeline(
                         GuardAction.REVERT_TO_ORIGINAL -> "; merge DISCARDED by Reality Guard, output is the unmerged reference frame"
                         GuardAction.BLEND_WITH_ORIGINAL -> "; merge blended with the reference frame at ratio ${"%.2f".format(guardDecision.blendRatio)}"
                         else -> ""
-                    }
+                    } + (if (reference.allFramesRejected) "; ${reference.note}" else "")
             )
         }
 

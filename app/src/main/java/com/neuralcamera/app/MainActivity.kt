@@ -109,12 +109,20 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Plans, captures, processes and saves one burst. Only frames returned by the camera are ever
-     * processed: when capture yields nothing this throws and nothing is saved.
+     * Scene illuminance for planning: estimated from the preview's settled auto-exposure (an estimate, not a light
+     * meter), else a fixed 120 lux placeholder. The source is saved with the capture metadata.
      */
-    private fun planFor(mode: com.neuralcamera.capture.CameraShootingMode) = app.capturePlanner.planCapture(
+    private fun sceneLux(): Pair<Float, String> {
+        val e = app.cameraController.latestPreviewExposure
+        val ae = e?.aeState
+        val settled = ae != null && ae in com.neuralcamera.cameracore.threea.ConvergenceDetector.AE_SETTLED
+        val lux = if (settled) com.neuralcamera.capture.scene.SceneAnalyzer.estimatedLuxFromAutoExposure(e?.exposureTimeNs, e?.sensitivityIso, e?.aperture) else null
+        return if (lux != null) lux.toFloat() to "AE_ESTIMATE" else 120f to "PLACEHOLDER"
+    }
+
+    private fun planFor(mode: com.neuralcamera.capture.CameraShootingMode, lux: Float = sceneLux().first) = app.capturePlanner.planCapture(
         mode = mode,
-        sceneLuminanceLux = 120f, // fixed placeholder: no light sensor reading is wired yet
+        sceneLuminanceLux = lux,
         motion = MotionVector(0.01f, 0.01f, 0.01f, true), // fixed placeholder: no motion estimate is wired yet
         deviceProfile = app.deviceProfileRepository.getActiveProfile()
     )
@@ -144,10 +152,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Plans, captures, processes and saves one burst. Only frames returned by the camera are ever
+     * processed: when capture yields nothing this throws and nothing is saved.
+     */
     private suspend fun captureAndSave(): String {
         val started = System.currentTimeMillis()
         // 1. Plan capture using UniversalCapturePlanner
-        val plan = planFor(uiState.activeMode)
+        val (lux, luxSource) = sceneLux()
+        val plan = planFor(uiState.activeMode, lux)
 
         // 2. Acquire real hardware frames
         // Precapture, 3A convergence and AE/AWB lock run before the burst; partial or unconverged captures are reported.
@@ -200,7 +213,7 @@ class MainActivity : ComponentActivity() {
                 mediaId = mediaId,
                 originalBytes = original,
                 masterBytes = master,
-                captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}, "requested": ${burst.result.requested}, "capture_state": "${burst.result.state}", "convergence": "${burst.convergence ?: "NOT_CHECKED"}", "captured_without_convergence": ${burst.result.capturedWithoutConvergence}, "ae_lock_requested": ${burst.lockRequested}, "ae_locked_frames": ${burst.lockedFrames ?: "null"}, "attempts": ${burst.result.attempts}}""",
+                captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}, "requested": ${burst.result.requested}, "capture_state": "${burst.result.state}", "convergence": "${burst.convergence ?: "NOT_CHECKED"}", "captured_without_convergence": ${burst.result.capturedWithoutConvergence}, "ae_lock_requested": ${burst.lockRequested}, "ae_locked_frames": ${burst.lockedFrames ?: "null"}, "attempts": ${burst.result.attempts}, "scene_lux": ${"%.1f".format(java.util.Locale.ROOT, lux)}, "scene_lux_source": "$luxSource", "motion_source": "PLACEHOLDER"}""",
                 processingMetadataJson = """{"pipeline": "${result.appliedPipelineName}", "guard": "${result.realityGuardDecision.action}", "colour": ${result.isColour}}""",
                 format = "jpg"
             )

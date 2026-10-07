@@ -132,6 +132,18 @@ object SceneAnalyzer {
         )
     }
 
+    /**
+     * Scene illuminance estimated from a converged auto-exposure alone (no frame luma): assumes AE metered the scene to
+     * mid-grey, so it is off by however far the AE target sits from 18% grey. Returns null when any input is missing.
+     * An estimate for capture planning, not a light-meter reading.
+     */
+    fun estimatedLuxFromAutoExposure(exposureTimeNs: Long?, iso: Int?, aperture: Float?): Double? {
+        if (exposureTimeNs == null || exposureTimeNs <= 0 || iso == null || iso <= 0 || aperture == null || aperture <= 0) return null
+        val n = aperture.toDouble()
+        val ev100 = log2(n * n / (exposureTimeNs / 1e9)) - log2(iso / 100.0)
+        return 2.5 * 2.0.pow(ev100)
+    }
+
     /** Dynamic range of the frame in stops between the 2nd and 98th percentile (display-referred, approximate). */
     fun displayRangeStops(stats: LumaStats): Double = ln((stats.p98 + 1.0) / (stats.p02 + 1.0)) / ln(2.0)
 }
