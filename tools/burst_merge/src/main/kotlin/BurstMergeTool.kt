@@ -6,6 +6,7 @@ import com.neuralcamera.isp.dng.DngReader
 import com.neuralcamera.isp.encode.DngMetadata
 import com.neuralcamera.isp.encode.DngWriter
 import com.neuralcamera.isp.encode.JpegEncoder
+import com.neuralcamera.isp.raw.RawFrontEnd
 import com.neuralcamera.isp.temporal.BayerFrame
 import com.neuralcamera.isp.temporal.BayerRadiometry
 import com.neuralcamera.isp.temporal.BayerTemporalMerge
@@ -26,6 +27,11 @@ import kotlin.system.exitProcess
  * JSON report. Per-frame exposure/ISO come from gate1_report.json when present (so exposure bracketing and AE drift are
  * accounted for), else from the DNG's own EXIF tags, else the frames are assumed equally exposed.
  *
+ * RAW front end: hot/dead pixels are fixed in every frame before the merge (needs a noise model), and the lens shading
+ * gain map the DNG carries (OpcodeList2, written by DngCreator when the capture enabled the shading map) is applied to
+ * the merged mosaic and to the reference used for comparison. Either is skipped, and the report says so, when its
+ * input is missing or it is turned off with --no-defects / --no-shading.
+ *
  * This is an evaluation tool: previews are a bilinear demosaic with white balance and an sRGB curve, not a finished ISP.
  */
 object BurstMergeTool {
@@ -37,7 +43,9 @@ object BurstMergeTool {
         val crop: IntArray?,
         val threads: Int,
         val maxFrames: Int?,
-        val noiseOverride: NoiseModel?
+        val noiseOverride: NoiseModel?,
+        val defects: Boolean,
+        val shading: Boolean
     )
 
     private fun parse(args: List<String>): Options {
@@ -55,7 +63,7 @@ object BurstMergeTool {
         }
         return Options(
             input, output, reference, crop, value("--threads")?.toInt() ?: TemporalMerge.defaultThreads(),
-            value("--max-frames")?.toInt(), noise
+            value("--max-frames")?.toInt(), noise, "--no-defects" !in args, "--no-shading" !in args
         )
     }
 
@@ -64,7 +72,7 @@ object BurstMergeTool {
             parse(args)
         } catch (e: Exception) {
             out.println("error: ${e.message}")
-            out.println("usage: --input <dir> [--output <dir>] [--reference auto|N] [--crop x,y,w,h] [--threads N] [--max-frames N] [--noise shot,read]")
+            out.println("usage: --input <dir> [--output <dir>] [--reference auto|N] [--crop x,y,w,h] [--threads N] [--max-frames N] [--noise shot,read] [--no-defects] [--no-shading]")
             return 2
         }
         val files = (o.input.listFiles { f -> f.isFile && f.name.endsWith(".dng", ignoreCase = true) } ?: emptyArray())
@@ -81,6 +89,7 @@ object BurstMergeTool {
         require(images.all { it.width == first.width && it.height == first.height && it.cfa == first.cfa && it.whiteLevel == first.whiteLevel }) {
             "all frames must share size, CFA and white level"
         }
+        val shadingMaps = images.map { it.lensShading }
         if (o.crop != null) {
             val (x, y, w, h) = o.crop.toList()
             require(x + w <= first.width && y + h <= first.height) { "--crop lies outside the ${first.width}x${first.height} image" }
@@ -120,6 +129,16 @@ object BurstMergeTool {
             }
         val noiseSource = if (images[refIndex].noise != null) "DNG NoiseProfile" else "--noise override"
 
+        // Front end, per frame and before the merge: table-free (dynamic) defect correction in DN.
+        val defectCounts = if (o.defects) images.map { img ->
+            RawFrontEnd.correctDefectsRaw(img.mosaic, img.blackLevels, img.whiteLevel, img.noise ?: noise)
+        } else null
+        val frontEnd = linkedMapOf<String, Any?>(
+            "order" to "BLACK_LEVEL, DEFECT_CORRECTION per frame -> TEMPORAL_MERGE -> LENS_SHADING",
+            "defectCorrection" to (defectCounts?.let { mapOf("method" to "dynamic, ${RawFrontEnd.DEFECT_SIGMA} sigma vs same-colour median", "pixelsPerFrame" to it) }
+                ?: "skipped: --no-defects")
+        )
+
         val frames = images.mapIndexed { i, img -> BayerFrame(img.mosaic, BayerRadiometry(img.blackLevels, img.whiteLevel, gains[i])) }
         out.println("merging ${frames.size} frames ${width}x$height ${first.cfa}, reference=${files[refIndex].name}, threads=${o.threads}")
         val tMerge = System.nanoTime()
@@ -129,6 +148,18 @@ object BurstMergeTool {
         o.output.mkdirs()
         val ref = images[refIndex]
         val refNorm = DngPreview.normalize(ref.mosaic, ref.blackLevels, ref.whiteLevel)
+        val shadingMap = shadingMaps[refIndex]
+        frontEnd["lensShading"] = when {
+            !o.shading -> "skipped: --no-shading"
+            shadingMap == null -> "skipped: the reference DNG has no usable GainMap (see dngNotes)"
+            else -> {
+                // Same gains on the merged mosaic and on the reference, so the comparisons below stay like for like.
+                for (plane in listOf(result.mosaic, refNorm)) {
+                    RawFrontEnd.applyLensShading(plane, ref.cfa, shadingMap, o.crop?.get(0) ?: 0, o.crop?.get(1) ?: 0, first.width, first.height)
+                }
+                "applied: DNG GainMap ${shadingMap.columns}x${shadingMap.rows} (reference frame), after the merge"
+            }
+        }
         writePgm16(File(o.output, "merged.pgm"), result.mosaic)
         writePng(File(o.output, "reference_preview.png"), DngPreview.render(refNorm, ref.cfa, ref.asShotNeutral), width, height)
         writePng(File(o.output, "merged_preview.png"), DngPreview.render(result.mosaic, ref.cfa, ref.asShotNeutral), width, height)
@@ -180,6 +211,7 @@ object BurstMergeTool {
             },
             "size" to mapOf("width" to width, "height" to height, "crop" to o.crop?.toList()),
             "cfa" to first.cfa.name,
+            "frontEnd" to frontEnd,
             "colorTransform" to transform.source.name,
             "mergedDng" to dngStatus,
             "whiteLevel" to first.whiteLevel,

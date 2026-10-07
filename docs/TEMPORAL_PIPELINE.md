@@ -49,13 +49,18 @@ output; an unrelated frame is rejected instead of blended; RAW Bayer merge denoi
 without cross-talk; the result is independent of the thread count.
 
 `tools/burst_merge/` runs the Bayer merge offline on a folder of DNG frames (for example a Gate 1 run's output) and
-writes a linear merged mosaic (`merged.pgm`, plus `merged.dng` when the source DNGs carry colour calibration), previews (including `*_color.png` and `merged_color.jpg` from the colour baseline) and a report with a global noise estimate before and after. `selftest.sh` checks
-it end to end on a synthetic burst.
+writes a linear merged mosaic (`merged.pgm`, plus `merged.dng` when the source DNGs carry colour calibration), previews (including `*_color.png` and `merged_color.jpg` from the colour baseline) and a report with a global noise estimate before and after. Before the merge it fixes hot/dead pixels in every frame
+(dynamic, noise-profile threshold); after it, it applies the lens shading gain map the DNG carries (OpcodeList2
+GainMap, as DngCreator writes it when the capture enabled the shading map) to the merged mosaic and the reference.
+Shading comes after the merge because the noise profile describes unshaded sensor data. `selftest.sh` checks it end to
+end on a synthetic burst with vignetting, an embedded gain map and fixed defective pixels; it needs `rawpy` and
+`Pillow`.
 
 ## Known limits
 
-- **Never run on real data.** Real noise (fixed pattern, lens shading, defective pixels, rolling shutter, optical
-  stabilization motion) is not modelled. Real bursts may need parameter changes.
+- **Never run on real data.** Lens shading and defective pixels are corrected only as synthesized; fixed-pattern
+  noise, rolling shutter and optical stabilization motion are not modelled. Whether the OnePlus 15 reports a shading
+  map, and what its DNG gain maps look like, is NOT_TESTED. Real bursts may need parameter changes.
 - **Translation per tile only.** Rotation, strong parallax and subject motion between frames become high residual and
   are rejected (less denoising there), not modelled.
 - **No IMU prior** yet; the search range is the pyramid's: `coarseRadius * 2^(levels-1)` pixels (about +-32 px for a
@@ -70,7 +75,7 @@ it end to end on a synthetic burst.
 ## Next steps toward Gate 3
 
 1. Run the Gate 1 recorder on the device and feed its DNGs to `tools/burst_merge`; inspect real results and tune.
-2. Colour pipeline: baseline done (`color/`, synthetic tests only; never compared against real sensor colour). Still missing: lens shading, local tone mapping, highlight/shadow handling, gain-map HDR, real-device colour validation.
+2. Colour pipeline: baseline done (`color/`, synthetic tests only; never compared against real sensor colour). Lens shading is applied in `tools/burst_merge` (synthetic tests only). Still missing: lens shading on the app path, local tone mapping, highlight/shadow handling, gain-map HDR, real-device colour validation.
 3. Burst capture is wired (YUV) and the app saves real JPEGs (colour when the frames carry chroma planes). Still missing: RAW capture feeding the Bayer merge and an on-device DNG save (Gate 1), colour JPEG from the app path, HEIF/Ultra HDR, gain-map HDR.
 4. IMU-aided motion prior and rotation-aware alignment.
 5. Build the 30-scene dataset and the blind A/B protocol (`docs/PROOF_GATES.md`, Gate 3).

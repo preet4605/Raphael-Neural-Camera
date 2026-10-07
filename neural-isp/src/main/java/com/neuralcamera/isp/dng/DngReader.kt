@@ -48,7 +48,9 @@ class DngRawImage(
     val forwardMatrix1: DoubleArray? = null,
     /** DNG CalibrationIlluminant1 (EXIF LightSource code), if present. */
     val calibrationIlluminant1: Int? = null,
-    val uniqueCameraModel: String? = null
+    val uniqueCameraModel: String? = null,
+    /** Lens shading gains from the OpcodeList2 GainMaps, over this (cropped) mosaic; null when absent or unsupported. */
+    val lensShading: com.neuralcamera.isp.calibration.LensShadingMap? = null
 ) {
     fun toColorTransform() = com.neuralcamera.isp.color.ColorTransform.from(asShotNeutral, forwardMatrix1, colorMatrix1)
 
@@ -70,6 +72,7 @@ object DngReader {
     private const val TAG_NOISE_PROFILE = 51041
     private const val TAG_EXPOSURE_TIME = 33434
     private const val TAG_ISO = 34855
+    private const val TAG_OPCODE_LIST_2 = 51009
     private const val PHOTOMETRIC_CFA = 32803L
 
     @Throws(TiffFormatException::class)
@@ -105,6 +108,8 @@ object DngReader {
         // Crop to the active area, rotating the per-position arrays when the crop moves the CFA phase.
         var mosaic = U16Plane(width, height, shorts)
         val active = lookup(TAG_ACTIVE_AREA)?.longs()
+        // GainMap coordinates span the ActiveArea before the crop below trims it to even dimensions.
+        var gainMapArea = width to height
         if (active != null && active.size == 4) {
             val top = active[0].toInt()
             val left = active[1].toInt()
@@ -118,6 +123,7 @@ object DngReader {
                 val cropped = ShortArray(w2 * h2)
                 for (y in 0 until h2) System.arraycopy(shorts, (top + y) * width + left, cropped, y * w2, w2)
                 mosaic = U16Plane(w2, h2, cropped)
+                gainMapArea = (right - left) to (bottom - top)
                 val shift = IntArray(4) { p -> ((p / 2 + top) % 2) * 2 + ((p % 2) + left) % 2 }
                 cfa = CfaPattern.fromColors(IntArray(4) { cfa.colors[shift[it]] })!!
                 blacks = DoubleArray(4) { blacks[shift[it]] }
@@ -131,9 +137,13 @@ object DngReader {
         val colorMatrix = lookup(TAG_COLOR_MATRIX_1)?.doubles()?.takeIf { it.size == 9 }
         val forwardMatrix = lookup(TAG_FORWARD_MATRIX_1)?.doubles()?.takeIf { it.size == 9 }
         if (colorMatrix == null && forwardMatrix == null) notes.add("no ColorMatrix1/ForwardMatrix1 in the DNG; colour is white-balance only")
+        val shading = rawIfd.entry(TAG_OPCODE_LIST_2)?.let { DngGainMap.parseOpcodeList(it.data, notes) }
+            ?.let { DngGainMap.toLensShadingMap(it, cfa, gainMapArea.first, gainMapArea.second, notes) }
+        if (shading == null) notes.add("no usable lens shading GainMap in the DNG")
         DngRawImage(mosaic.width, mosaic.height, cfa, blacks, white, noise, neutral, exposure, iso, mosaic, notes, colorMatrix, forwardMatrix,
             lookup(TAG_CALIBRATION_ILLUMINANT_1)?.longs()?.firstOrNull()?.toInt(),
-            lookup(TAG_UNIQUE_CAMERA_MODEL)?.longs()?.let { String(ByteArray(it.size) { i -> it[i].toByte() }, Charsets.US_ASCII).trimEnd('\u0000') })
+            lookup(TAG_UNIQUE_CAMERA_MODEL)?.longs()?.let { String(ByteArray(it.size) { i -> it[i].toByte() }, Charsets.US_ASCII).trimEnd('\u0000') },
+            shading)
     }
 
     private fun expandBlackLevels(repeat: LongArray?, values: DoubleArray?, notes: MutableList<String>): DoubleArray {

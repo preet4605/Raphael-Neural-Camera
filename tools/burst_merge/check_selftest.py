@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Compares tool output to the synthetic ground truth: merged.pgm must beat the single reference frame."""
+"""Compares tool output to the synthetic ground truth: merged.pgm must beat the single reference frame, with lens
+shading and the fixed hot/dead pixels corrected."""
 import json
 import pathlib
 import sys
@@ -31,6 +32,21 @@ p = psnr(merged, truth)
 print(f"PSNR merged vs truth: {p:.2f} dB")
 assert report["noiseSigmaGreen"]["ratio"] < 0.7, "merged noise should be clearly lower than the reference's"
 assert p > 33.0, "merged mosaic should be a good estimate of the truth"
+
+fe = report["frontEnd"]
+assert str(fe["lensShading"]).startswith("applied"), fe
+assert all(n >= len(np.load(burst / "defects.npy")) for n in fe["defectCorrection"]["pixelsPerFrame"]), fe
+defects = np.load(burst / "defects.npy")
+worst = max(abs(merged[r, c] - truth[r, c]) for r, c in defects)
+print(f"defective pixels: worst abs error {worst:.4f}")
+assert worst < 0.05, "hot/dead pixels must be corrected"
+# Shading: the corners (strongest vignetting) must be as close to the truth as the centre.
+def region_bias(ys, xs):
+    return float(np.mean(merged[ys, xs] - truth[ys, xs]))
+bias_corner = region_bias(slice(16, 64), slice(16, 64))
+bias_centre = region_bias(slice(merged.shape[0] // 2 - 24, merged.shape[0] // 2 + 24), slice(merged.shape[1] // 2 - 24, merged.shape[1] // 2 + 24))
+print(f"mean bias: corner {bias_corner:+.4f}, centre {bias_centre:+.4f}")
+assert abs(bias_corner) < 0.005 and abs(bias_centre) < 0.005, "lens shading must be corrected"
 
 # Encoders: validated with independent decoders (libraw via rawpy, Pillow), not with the code that wrote the files.
 import rawpy
