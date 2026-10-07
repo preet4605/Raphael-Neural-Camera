@@ -1,13 +1,13 @@
-package com.neuralcamera.capture.orchestration
+package com.neuralcamera.cameracore.orchestration
 
-import com.neuralcamera.capture.threea.ConvergenceVerdict
+import com.neuralcamera.cameracore.threea.ConvergenceVerdict
 import kotlin.math.abs
 
 /*
  * Capture orchestration as a deterministic state machine: pre-capture, 3A convergence, burst scheduling, cancellation,
  * timeout/retry, partial-burst recovery and session recovery. It issues [CaptureCommand]s and consumes
- * [CaptureEvent]s; a Camera2 adapter executes the commands. No adapter is wired yet (RealCamera2Controller still runs its
- * own simple burst), so on-device behaviour is NOT_TESTED.
+ * [CaptureEvent]s. [OrchestratorDriver] runs it against a [CaptureCommandExecutor]; RealCamera2Controller.captureBurst
+ * is the Camera2 executor. On-device behaviour is NOT_TESTED.
  */
 
 enum class OrchestrationState { IDLE, PRECAPTURE, CONVERGING, CAPTURING, RECOVERING, COMPLETE, PARTIAL, FAILED, CANCELLED }

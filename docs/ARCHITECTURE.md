@@ -15,7 +15,7 @@ Target design (goals, not current state; see [`AUDIT.md`](AUDIT.md) for what exi
 | Path | Responsibility | Where | State |
 |---|---|---|---|
 | **LIVE PREVIEW** | Low-latency preview; no heavy processing on the preview stream | `RealCamera2Controller` repeating request → `SurfaceView` | Code exists, NOT_TESTED on device |
-| **CAPTURE PIPELINE** | Camera2 session, 3A, frame scheduling, RAW/YUV capture, metadata, burst orchestration | `camera-core` (Camera2), `capture-intelligence` `threea/`, `orchestration/`, `motion/`, `scene/`, `policy/` | YUV burst runs on AE auto; 3A/orchestration contracts are JVM-tested, not wired |
+| **CAPTURE PIPELINE** | Camera2 session, 3A, frame scheduling, RAW/YUV capture, metadata, burst orchestration | `camera-core` (Camera2, `threea/`, `orchestration/`), `capture-intelligence` `motion/`, `scene/`, `policy/` | YUV burst runs through the orchestrator: precapture, 3A convergence wait, AE/AWB lock, retry/partial handling (wired; device NOT_TESTED). Motion/scene/policy contracts are JVM-tested, not wired |
 | **COMPUTATIONAL PHOTOGRAPHY** | Alignment, quality assessment, temporal merge, RAW processing, HDR, neural restoration, colour | `neural-isp` `raw/`, `calibration/`, `temporal/`, `color/`; `quality-engine` `frame/`; `neural-runtime` | Merge/colour/RAW front end JVM-tested on synthetic data; HDR and neural restoration missing |
 | **OUTPUT + GALLERY** | JPEG/HEIF/Ultra HDR, metadata, atomic storage, indexing, review | `neural-isp` `encode/`; `gallery` `storage/`, `provenance/` | JPEG/DNG encoders and atomic storage exist; HEIF/Ultra HDR missing |
 | **AI STUDIO** | Creative/generative pipeline, never mixed with normal capture | not implemented | `PipelinePath.AI_STUDIO` is the only path allowed to record `ContentOrigin.GENERATED`; enforced by `ProvenanceRecord` and `SchedulingPolicy` |
@@ -182,7 +182,7 @@ In adherence to Section 18 of the Constitution:
 ## 8. Phase Status, Phase 1 Implementation & Scope Boundary
 
 - **Current state**: Phase 0 (foundation) and Phase 1 (hardware discovery / device profile) are complete in code. **Phase 2 (neural runtime foundation) is IN PROGRESS: the backends and the Gate 2 harness exist but have never run on the device.** Earlier commit messages calling Phase 2 complete were wrong when written. All proof flags are `FALSE`; see [`PROOF_GATES.md`](PROOF_GATES.md).
-- **Known gaps** (full list in [`AUDIT.md`](AUDIT.md)): the YUV burst runs without precapture, convergence wait or 3A lock; the diagnostics sheet fields read `N/A` until measured; the committed OnePlus 15 profile data is **UNVERIFIED** (no raw audit logs; its timestamps contradict its folder name); the zero-copy audit is a design expectation, not a measurement.
+- **Known gaps** (full list in [`AUDIT.md`](AUDIT.md)): 3A convergence and lock on the YUV burst are wired but NOT_TESTED on the device; the diagnostics sheet fields read `N/A` until measured; the committed OnePlus 15 profile data is **UNVERIFIED** (no raw audit logs; its timestamps contradict its folder name); the zero-copy audit is a design expectation, not a measurement.
 
 - **Phase 1 Scope Completed**:
   - Real Camera2 capability resolver (`DeviceCapabilityResolver`) interrogating identity, sensor active array, focal lengths, apertures, 3A modes, stream formats, dynamic range profiles, stream use cases, and Android 16 capabilities.

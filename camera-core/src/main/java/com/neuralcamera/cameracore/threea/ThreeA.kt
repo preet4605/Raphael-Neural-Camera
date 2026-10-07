@@ -1,4 +1,4 @@
-package com.neuralcamera.capture.threea
+package com.neuralcamera.cameracore.threea
 
 import kotlin.math.abs
 import kotlin.math.ln
@@ -11,8 +11,8 @@ import kotlin.math.roundToLong
  *
  * Pure Kotlin. The integer codes below are the documented values of android.hardware.camera2.CaptureResult
  * CONTROL_AE_STATE / CONTROL_AF_STATE / CONTROL_AWB_STATE, so a Camera2 adapter maps results with fromCamera2(...).
- * No Camera2 adapter is wired yet: RealCamera2Controller runs bursts on CONTROL_MODE_AUTO without waiting for
- * convergence. Physical behaviour on the OnePlus 15 (how fast and how reliably 3A converges): NOT_TESTED.
+ * RealCamera2Controller.captureBurst feeds preview results after the precapture trigger into ConvergenceDetector and
+ * locks AE/AWB for the burst. Physical behaviour on the OnePlus 15 (how fast and how reliably 3A converges): NOT_TESTED.
  */
 
 enum class AeState(val camera2: Int) {

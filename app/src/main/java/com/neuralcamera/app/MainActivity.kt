@@ -150,11 +150,19 @@ class MainActivity : ComponentActivity() {
         val plan = planFor(uiState.activeMode)
 
         // 2. Acquire real hardware frames
-        val frames = app.cameraController.triggerBurstCapture(plan.temporalFrameCount)
-        check(frames.isNotEmpty()) { "Capture returned no frames; nothing was saved." }
+        // Precapture, 3A convergence and AE/AWB lock run before the burst; partial or unconverged captures are reported.
+        val burst = app.cameraController.captureBurst(plan.temporalFrameCount)
+        check(burst.usable) { "Capture ${burst.result.state}: ${burst.result.reason}; nothing was saved." }
+        val frames = burst.frames
+        val caveats = burst.caveats()
         app.telemetryLogger.logEvent(
             "BURST_CAPTURED",
-            mapOf("requested" to plan.temporalFrameCount, "received" to frames.size, "format" to frames.first().format, "size" to "${frames.first().width}x${frames.first().height}")
+            mapOf(
+                "requested" to plan.temporalFrameCount, "received" to frames.size, "format" to frames.first().format,
+                "size" to "${frames.first().width}x${frames.first().height}", "state" to burst.result.state.name,
+                "convergence" to (burst.convergence?.name ?: "NOT_CHECKED"), "attempts" to burst.result.attempts,
+                "lockedFrames" to (burst.lockedFrames ?: -1)
+            )
         )
         val reference = frames.last().metadata
 
@@ -192,7 +200,7 @@ class MainActivity : ComponentActivity() {
                 mediaId = mediaId,
                 originalBytes = original,
                 masterBytes = master,
-                captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}}""",
+                captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}, "requested": ${burst.result.requested}, "capture_state": "${burst.result.state}", "convergence": "${burst.convergence ?: "NOT_CHECKED"}", "captured_without_convergence": ${burst.result.capturedWithoutConvergence}, "ae_lock_requested": ${burst.lockRequested}, "ae_locked_frames": ${burst.lockedFrames ?: "null"}, "attempts": ${burst.result.attempts}}""",
                 processingMetadataJson = """{"pipeline": "${result.appliedPipelineName}", "guard": "${result.realityGuardDecision.action}", "colour": ${result.isColour}}""",
                 format = "jpg"
             )
@@ -212,7 +220,8 @@ class MainActivity : ComponentActivity() {
         )
         val seconds = (System.currentTimeMillis() - started) / 1000.0
         return "Saved ${frames.size}-frame ${if (result.isColour) "colour" else "gray"} ${result.outputWidth}x${result.outputHeight} JPEG " +
-            "in ${"%.1f".format(seconds)} s" + (galleryPath?.let { " -> $it" } ?: " (gallery save failed; copy is in app storage)")
+            "in ${"%.1f".format(seconds)} s" + (galleryPath?.let { " -> $it" } ?: " (gallery save failed; copy is in app storage)") +
+            (if (caveats.isEmpty()) "" else " [${caveats.joinToString("; ")}]")
     }
 
     private fun startCameraPreviewIfReady() {

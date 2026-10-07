@@ -1,4 +1,4 @@
-package com.neuralcamera.capture.threea
+package com.neuralcamera.cameracore.threea
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

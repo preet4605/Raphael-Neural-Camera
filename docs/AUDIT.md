@@ -29,8 +29,8 @@ FULL_PIPELINE_PROVEN=FALSE
 | Inference contract with attribution, FP32 CPU reference, `denoise-tiny-v1` artifacts | `neural-runtime` |
 | Gate 1/2 independent checkers + self-tests | `tools/proof/check_gate{1,2}.py` |
 | Failure-aware execution contract (new) | `models` `execution/StageOutcome.kt` |
-| Camera 3A contracts (new) | `capture-intelligence` `threea/` |
-| Capture orchestration state machine (new) | `capture-intelligence` `orchestration/` |
+| Camera 3A contracts (new) | `camera-core` `threea/` (moved from `capture-intelligence`) |
+| Capture orchestration state machine + driver (new) | `camera-core` `orchestration/` (moved from `capture-intelligence`) |
 | Sensor calibration model + noise-law fit (new) | `neural-isp` `calibration/` |
 | RAW10/12/16 unpack, black level, defect, lens shading, stage order (new) | `neural-isp` `raw/` |
 | Rolling-shutter, gyro integration, OIS/EIS/crop-aware motion (new) | `capture-intelligence` `motion/` |
@@ -61,7 +61,7 @@ so it cannot be counted.
 
 | Missing | Notes |
 |---|---|
-| Camera2 adapters for the new contracts | 3A detector, orchestrator, motion, scene, quality ranking and policies are not called by `RealCamera2Controller`/`MainActivity`. Bursts run on `CONTROL_MODE_AUTO` with no precapture, no convergence wait and no AE/AWB lock. |
+| Camera2 adapters for the new contracts | 3A detector and orchestrator are now wired (`RealCamera2Controller.captureBurst`: precapture + AF trigger, convergence wait, AE/AWB lock, retry, partial, session recovery; device NOT_TESTED). Motion, scene, quality ranking and policies are still not called by `RealCamera2Controller`/`MainActivity`. |
 | Real scene inputs | `MainActivity.planFor` uses a fixed 120 lux and fixed motion (labelled placeholders). |
 | Exposure bracketing in capture | Controller refuses `bracketSteps` (returns no frames). Planner exists. |
 | RAW in the camera UI | RAW exists only in the Gate 1 probe. The app's "original" is the reference frame's **luma as a gray JPEG**, not sensor data. |

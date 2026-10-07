@@ -1,6 +1,6 @@
-package com.neuralcamera.capture.orchestration
+package com.neuralcamera.cameracore.orchestration
 
-import com.neuralcamera.capture.threea.ConvergenceVerdict
+import com.neuralcamera.cameracore.threea.ConvergenceVerdict
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
