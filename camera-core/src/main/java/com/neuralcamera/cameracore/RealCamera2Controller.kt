@@ -76,6 +76,9 @@ class RealCamera2Controller(
     @Volatile private var burstSize: android.util.Size? = null
     /** Collector for the burst in flight; the reader listener hands every arriving image to it. */
     @Volatile private var activeCollector: BurstCollector<CopiedYuv, TotalCaptureResult>? = null
+    /** Bytes copied from camera buffers into the JVM heap since the current burst started (measured, not estimated). */
+    private val copiedBytes = java.util.concurrent.atomic.AtomicLong(0)
+    private val copiedImages = java.util.concurrent.atomic.AtomicInteger(0)
     private var analysisImageReader: ImageReaderManager? = null
 
     @Volatile private var zoomRatio = 1.0f
@@ -244,7 +247,12 @@ class RealCamera2Controller(
                         val image = try { r.acquireNextImage() } catch (e: Exception) { null } ?: break
                         try {
                             val collector = activeCollector
-                            if (collector != null) collector.onImage(image.timestamp, CopiedYuv.copyOf(image))
+                            if (collector != null) {
+                                val copy = CopiedYuv.copyOf(image)
+                                copiedBytes.addAndGet(copy.planes.sumOf { it.buffer.size.toLong() })
+                                copiedImages.incrementAndGet()
+                                collector.onImage(image.timestamp, copy)
+                            }
                         } finally {
                             image.close() // always return the buffer, even when no burst is waiting
                         }
@@ -341,6 +349,8 @@ class RealCamera2Controller(
 
         stateMachine.transitionTo(CameraState.CAPTURING)
         _operationalState.value = CameraOperationalState.CAPTURING_BURST
+        copiedBytes.set(0)
+        copiedImages.set(0)
         try {
             val result = OrchestratorDriver(policy, executor).run()
             val kept = result.frames.map { it.sensorTimestampNs }.toSet()
@@ -355,7 +365,10 @@ class RealCamera2Controller(
                     metadata = md
                 )
             }
-            BurstCapture(frames, result, executor.convergence, executor.lockedFrames, executor.lockRequested)
+            BurstCapture(
+                frames, result, executor.convergence, executor.lockedFrames, executor.lockRequested,
+                copy = ZeroCopyAuditor.measuredBurstCopy(copiedBytes.get(), copiedImages.get())
+            )
         } finally {
             activeCollector?.finish()
             activeCollector = null

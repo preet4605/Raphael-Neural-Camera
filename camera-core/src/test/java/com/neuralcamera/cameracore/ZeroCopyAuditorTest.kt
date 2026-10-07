@@ -38,4 +38,13 @@ class ZeroCopyAuditorTest {
         assertEquals("NOT_MEASURED", report.actualHardwarePathStatus)
         assertTrue("Per-frame copy bytes should be non-zero when copying to JVM byte arrays", report.totalPerFrameCopiedBytes > 0)
     }
+
+    @Test
+    fun measuredBurstCopyIsMarkedMeasuredAndAbsentWhenNothingWasCopied() {
+        val r = ZeroCopyAuditor.measuredBurstCopy(bytes = 3L * 6_000_000, images = 3)!!
+        assertTrue(r.measured)
+        assertEquals(18_000_000L, r.bytesMoved)
+        assertTrue(r.frequency.contains("3 images"))
+        assertEquals(null, ZeroCopyAuditor.measuredBurstCopy(0, 0))
+    }
 }

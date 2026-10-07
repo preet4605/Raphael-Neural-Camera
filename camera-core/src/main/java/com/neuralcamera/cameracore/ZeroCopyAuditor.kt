@@ -1,8 +1,9 @@
 package com.neuralcamera.cameracore
 
 /**
- * Record documenting an actual or potential memory copy in the camera pipeline. Every record here is a design
- * expectation, not a measurement ([measured] is false): nothing in the app instruments buffer movement yet.
+ * Record documenting an actual or potential memory copy in the camera pipeline. [measured] is true only for records
+ * built from counted bytes ([ZeroCopyAuditor.measuredBurstCopy]); [ZeroCopyAuditor.auditPipeline] records are design
+ * expectations.
  */
 data class BufferCopyRecord(
     val stage: String,
@@ -35,6 +36,27 @@ data class ZeroCopyAuditReport(
  * exists, so the zero-copy claim stays NOT_PROVEN regardless of what this report lists.
  */
 object ZeroCopyAuditor {
+
+    /**
+     * A measured record of the YUV burst path: [bytes] actually copied from camera Image planes into JVM arrays for
+     * [images] images (all attempts, including frames later dropped). This is the one copy the app can count today;
+     * it proves copies exist on this path, not the absence of others.
+     */
+    fun measuredBurstCopy(bytes: Long, images: Int): BufferCopyRecord? {
+        require(bytes >= 0 && images >= 0) { "counts cannot be negative" }
+        if (images == 0) return null
+        return BufferCopyRecord(
+            stage = "Camera ImageReader -> JVM heap (CopiedYuv)",
+            source = "android.media.Image planes",
+            destination = "JVM ByteArray (FramePlane)",
+            bytesMoved = bytes,
+            frequency = "Per burst ($images images)",
+            isAvoidable = true,
+            reason = "The burst path copies every YUV image so the camera buffer can be returned at once.",
+            latencyImpactMs = Float.NaN, // not timed
+            measured = true
+        )
+    }
 
     fun auditPipeline(
         previewWidth: Int = 1920,

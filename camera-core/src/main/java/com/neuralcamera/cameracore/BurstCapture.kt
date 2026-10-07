@@ -17,7 +17,9 @@ data class BurstCapture(
     /** Frames of the delivered attempt whose result reported AE LOCKED; null when no burst ran. */
     val lockedFrames: Int?,
     /** Whether AE/AWB lock was requested (false when the camera reports neither lock as available). */
-    val lockRequested: Boolean
+    val lockRequested: Boolean,
+    /** Measured camera-buffer -> heap copies of this burst (every attempt); null when nothing was captured. */
+    val copy: BufferCopyRecord? = null
 ) {
     val usable: Boolean get() = frames.isNotEmpty() && result.state in setOf(OrchestrationState.COMPLETE, OrchestrationState.PARTIAL)
 
