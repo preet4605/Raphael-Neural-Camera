@@ -190,6 +190,20 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        // Provenance: what each stage actually did (captured -> reconstructed), saved with the bundle and in EXIF.
+        val mediaId = "shot_${System.currentTimeMillis()}"
+        val provenance = com.neuralcamera.gallery.provenance.CaptureProvenance.forBurst(
+            mediaId, burst,
+            com.neuralcamera.gallery.provenance.MergeFacts(
+                framesIn = frames.size,
+                guardAction = result.realityGuardDecision.action.name,
+                blendRatio = result.realityGuardDecision.blendRatio,
+                referenceFallback = result.referenceFallback,
+                colour = result.isColour
+            ),
+            policy = uiState.activeMode.name
+        )
+
         // 4. Encode and save non-destructively. The master is a colour JPEG when the frames had chroma planes (luma is
         // merged, chroma comes from the reference frame), else grayscale; the original is the reference luma. A DNG
         // needs RAW frames, which this YUV path does not produce.
@@ -197,10 +211,10 @@ class MainActivity : ComponentActivity() {
             orientation = when (reference.sensorOrientation) { 90 -> 6; 180 -> 3; 270 -> 8; else -> 1 },
             exposureTimeSeconds = reference.exposureTimeNs.takeIf { it > 0 }?.let { it / 1e9 },
             iso = reference.iso.takeIf { it > 0 },
-            software = "Raphael Neural Camera"
+            software = "Raphael Neural Camera",
+            imageDescription = provenance.exifSummary()
         )
         val pixelCount = result.outputWidth * result.outputHeight
-        val mediaId = "shot_${System.currentTimeMillis()}"
         val master = withContext(Dispatchers.Default) {
             if (result.isColour) JpegEncoder.encodeRgb(result.masterRgbPlane, result.outputWidth, result.outputHeight, 95, exif)
             else JpegEncoder.encodeGray(ByteArray(pixelCount) { result.masterRgbPlane[it * 3] }, result.outputWidth, result.outputHeight, 95, exif)
@@ -214,7 +228,7 @@ class MainActivity : ComponentActivity() {
                 originalBytes = original,
                 masterBytes = master,
                 captureMetadataJson = """{"iso": ${reference.iso}, "exposure_ns": ${reference.exposureTimeNs}, "source_format": "${frames.first().format}", "frames": ${frames.size}, "requested": ${burst.result.requested}, "capture_state": "${burst.result.state}", "convergence": "${burst.convergence ?: "NOT_CHECKED"}", "captured_without_convergence": ${burst.result.capturedWithoutConvergence}, "ae_lock_requested": ${burst.lockRequested}, "ae_locked_frames": ${burst.lockedFrames ?: "null"}, "attempts": ${burst.result.attempts}, "scene_lux": ${"%.1f".format(java.util.Locale.ROOT, lux)}, "scene_lux_source": "$luxSource", "motion_source": "PLACEHOLDER"}""",
-                processingMetadataJson = """{"pipeline": "${result.appliedPipelineName}", "guard": "${result.realityGuardDecision.action}", "colour": ${result.isColour}}""",
+                processingMetadataJson = """{"pipeline": ${com.neuralcamera.gallery.provenance.ProvenanceRecord.q(result.appliedPipelineName)}, "guard": "${result.realityGuardDecision.action}", "colour": ${result.isColour}, "provenance": ${provenance.toJson()}}""",
                 format = "jpg"
             )
         }

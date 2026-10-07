@@ -21,7 +21,9 @@ data class ProcessedImageResult(
     /** True when [masterRgbPlane] carries real colour (from the frame's chroma planes); false means R=G=B gray. */
     val isColour: Boolean = false,
     /** Per alternate frame: how much of it the temporal merge used (input for the quality engine). */
-    val temporalStats: List<FrameMergeStats> = emptyList()
+    val temporalStats: List<FrameMergeStats> = emptyList(),
+    /** Every frame failed the quality checks and the sharpest was used as merge reference anyway. */
+    val referenceFallback: Boolean = false
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

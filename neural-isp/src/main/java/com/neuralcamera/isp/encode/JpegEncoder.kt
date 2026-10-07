@@ -12,7 +12,9 @@ data class JpegExif(
     val orientation: Int? = null,
     val exposureTimeSeconds: Double? = null,
     val iso: Int? = null,
-    val software: String? = null
+    val software: String? = null,
+    /** IFD0 ImageDescription, e.g. the provenance summary. Non-ASCII characters are written as '?'. */
+    val imageDescription: String? = null
 )
 
 /**
@@ -228,7 +230,7 @@ object JpegEncoder {
     }
 }
 
-/** Minimal EXIF TIFF block (little endian): IFD0 {Orientation, Software, ExifIFD} + Exif IFD {ExposureTime, ISO}. */
+/** Minimal EXIF TIFF block (little endian): IFD0 {ImageDescription, Orientation, Software, ExifIFD} + Exif IFD {ExposureTime, ISO}. */
 internal object ExifBlock {
     fun build(e: JpegExif): ByteArray? {
         class Entry(val tag: Int, val type: Int, val count: Int, val value: ByteArray)
@@ -245,6 +247,10 @@ internal object ExifBlock {
         val ifd0 = ArrayList<Entry>()
         e.orientation?.takeIf { it in 1..8 }?.let { ifd0.add(Entry(0x0112, 3, 1, le16(it))) }
         e.software?.let { s -> val b = s.toByteArray(Charsets.US_ASCII) + 0; ifd0.add(Entry(0x0131, 2, b.size, b)) }
+        e.imageDescription?.let { s ->
+            val b = s.map { if (it.code in 0x20..0x7E) it else '?' }.joinToString("").toByteArray(Charsets.US_ASCII) + 0
+            ifd0.add(Entry(0x010E, 2, b.size, b))
+        }
         if (ifd0.isEmpty() && exifEntries.isEmpty()) return null
         if (exifEntries.isNotEmpty()) ifd0.add(Entry(0x8769, 4, 1, ByteArray(4))) // patched below
         ifd0.sortBy { it.tag }

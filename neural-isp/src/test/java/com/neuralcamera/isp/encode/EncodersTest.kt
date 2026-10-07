@@ -66,7 +66,7 @@ class EncodersTest {
     @Test
     fun exifFieldsAreReadableByAnIndependentParser() {
         val gray = ByteArray(16 * 16) { 100 }
-        val jpeg = JpegEncoder.encodeGray(gray, 16, 16, exif = JpegExif(orientation = 6, exposureTimeSeconds = 1.0 / 120, iso = 400, software = "Raphael"))
+        val jpeg = JpegEncoder.encodeGray(gray, 16, 16, exif = JpegExif(orientation = 6, exposureTimeSeconds = 1.0 / 120, iso = 400, software = "Raphael", imageDescription = "COMPUTATIONAL_PHOTOGRAPHY; origin=RECONSTRUCTED; caf\u00e9"))
         assertNotNull(JdkDecodedImage.read(jpeg))
         // Locate APP1 and parse the TIFF block with the same TIFF reader used for DNGs.
         var i = 2
@@ -82,7 +82,9 @@ class EncodersTest {
                     val exif = t.ifds.first { it.entry(0x829A) != null }
                     assertEquals(1.0 / 120, exif.doubles(0x829A)!![0], 1e-4)
                     assertEquals(400L, exif.longs(0x8827)!![0])
+                    assertTrue(t.ifd0.entry(0x010E) != null)
                 }
+                assertTrue(String(tiff, Charsets.US_ASCII).contains("COMPUTATIONAL_PHOTOGRAPHY; origin=RECONSTRUCTED; caf?\u0000"))
                 return
             }
             if (marker == 0xDA) break

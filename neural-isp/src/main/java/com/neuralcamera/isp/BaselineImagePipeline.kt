@@ -135,6 +135,7 @@ class BaselineImagePipeline(
                 isNeuralAccelerated = false,
                 isColour = chroma != null,
                 temporalStats = merge.frameStats,
+                referenceFallback = reference.allFramesRejected,
                 // Never report the merge as applied when the guard replaced or diluted it.
                 appliedPipelineName = "Classical baseline ISP (tile-aligned, noise-aware, motion-robust temporal merge on luma; chroma from the reference frame)" +
                     when (guardDecision.action) {
