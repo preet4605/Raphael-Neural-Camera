@@ -50,9 +50,21 @@ class DngRawImage(
     val calibrationIlluminant1: Int? = null,
     val uniqueCameraModel: String? = null,
     /** Lens shading gains from the OpcodeList2 GainMaps, over this (cropped) mosaic; null when absent or unsupported. */
-    val lensShading: com.neuralcamera.isp.calibration.LensShadingMap? = null
+    val lensShading: com.neuralcamera.isp.calibration.LensShadingMap? = null,
+    /** Second calibration set (DNG ColorMatrix2, ForwardMatrix2, CalibrationIlluminant2), if present. */
+    val colorMatrix2: DoubleArray? = null,
+    val forwardMatrix2: DoubleArray? = null,
+    val calibrationIlluminant2: Int? = null
 ) {
-    fun toColorTransform() = com.neuralcamera.isp.color.ColorTransform.from(asShotNeutral, forwardMatrix1, colorMatrix1)
+    fun toColorTransform() = com.neuralcamera.isp.color.ColorTransform.fromCalibration(
+        asShotNeutral, colorMatrix1, colorMatrix2, forwardMatrix1, forwardMatrix2, calibrationIlluminant1, calibrationIlluminant2
+    )
+
+    /** The same image with a cropped mosaic. The shading map is dropped: it spans the uncropped area. */
+    fun withMosaic(newMosaic: U16Plane) = DngRawImage(
+        newMosaic.width, newMosaic.height, cfa, blackLevels, whiteLevel, noise, asShotNeutral, exposureTimeSeconds, iso, newMosaic,
+        notes, colorMatrix1, forwardMatrix1, calibrationIlluminant1, uniqueCameraModel, null, colorMatrix2, forwardMatrix2, calibrationIlluminant2
+    )
 
     fun toBayerFrame(gain: Double = 1.0) = BayerFrame(mosaic, BayerRadiometry(blackLevels, whiteLevel, gain))
 }
@@ -67,6 +79,9 @@ object DngReader {
     private const val TAG_ACTIVE_AREA = 50829
     private const val TAG_COLOR_MATRIX_1 = 50721
     private const val TAG_FORWARD_MATRIX_1 = 50964
+    private const val TAG_COLOR_MATRIX_2 = 50722
+    private const val TAG_FORWARD_MATRIX_2 = 50965
+    private const val TAG_CALIBRATION_ILLUMINANT_2 = 50779
     private const val TAG_CALIBRATION_ILLUMINANT_1 = 50778
     private const val TAG_UNIQUE_CAMERA_MODEL = 50708
     private const val TAG_NOISE_PROFILE = 51041
@@ -143,7 +158,10 @@ object DngReader {
         DngRawImage(mosaic.width, mosaic.height, cfa, blacks, white, noise, neutral, exposure, iso, mosaic, notes, colorMatrix, forwardMatrix,
             lookup(TAG_CALIBRATION_ILLUMINANT_1)?.longs()?.firstOrNull()?.toInt(),
             lookup(TAG_UNIQUE_CAMERA_MODEL)?.longs()?.let { String(ByteArray(it.size) { i -> it[i].toByte() }, Charsets.US_ASCII).trimEnd('\u0000') },
-            shading)
+            shading,
+            lookup(TAG_COLOR_MATRIX_2)?.doubles()?.takeIf { it.size == 9 },
+            lookup(TAG_FORWARD_MATRIX_2)?.doubles()?.takeIf { it.size == 9 },
+            lookup(TAG_CALIBRATION_ILLUMINANT_2)?.longs()?.firstOrNull()?.toInt())
     }
 
     private fun expandBlackLevels(repeat: LongArray?, values: DoubleArray?, notes: MutableList<String>): DoubleArray {

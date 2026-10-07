@@ -13,7 +13,9 @@ package com.neuralcamera.isp.color
 class ColorTransform(
     /** Camera linear RGB (black-subtracted, normalized) to linear sRGB, white balance included. */
     val cameraToLinearSrgb: Matrix3,
-    val source: Source
+    val source: Source,
+    /** How the calibration was chosen (dual-illuminant interpolation or why not). */
+    val note: String = ""
 ) {
     enum class Source { FORWARD_MATRIX, COLOR_MATRIX, WHITE_BALANCE_ONLY }
 
@@ -35,7 +37,8 @@ class ColorTransform(
             -0.7502, 1.7135, 0.0367,
             0.0389, -0.0685, 1.0296
         ))
-        private val D50_WHITE = doubleArrayOf(0.9642, 1.0, 0.8249)
+        // The white the XYZ_D50_TO_SRGB matrix assumes (Lindbloom); a rounded value leaves a cast on white.
+        private val D50_WHITE = doubleArrayOf(0.96422, 1.0, 0.82521)
 
         private fun bradford(srcWhite: DoubleArray, dstWhite: DoubleArray): Matrix3 {
             val s = BRADFORD.apply(srcWhite)
@@ -62,6 +65,18 @@ class ColorTransform(
                 return ColorTransform(XYZ_D50_TO_SRGB * bradford(white, D50_WHITE) * camToXyz, Source.COLOR_MATRIX)
             }
             return ColorTransform(wb, Source.WHITE_BALANCE_ONLY)
+        }
+
+        /** As [from], after interpolating two calibration sets to the scene's estimated CCT ([DualIlluminant]). */
+        fun fromCalibration(
+            asShotNeutral: DoubleArray?, colorMatrix1: DoubleArray?, colorMatrix2: DoubleArray?,
+            forwardMatrix1: DoubleArray?, forwardMatrix2: DoubleArray?, illuminant1: Int?, illuminant2: Int?
+        ): ColorTransform {
+            val valid = { m: DoubleArray? -> m?.takeIf { it.size == 9 && it.all(Double::isFinite) } }
+            val r = DualIlluminant.interpolate(asShotNeutral, valid(colorMatrix1), valid(colorMatrix2), valid(forwardMatrix1),
+                valid(forwardMatrix2), illuminant1, illuminant2)
+            val t = from(asShotNeutral, r.forwardMatrix ?: valid(forwardMatrix1).takeIf { r.weight1 == 1.0 }, r.colorMatrix)
+            return ColorTransform(t.cameraToLinearSrgb, t.source, r.note)
         }
     }
 }

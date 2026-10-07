@@ -1,7 +1,6 @@
 import com.neuralcamera.benchmarks.Json
 import com.neuralcamera.isp.color.ColorPipeline
 import com.neuralcamera.isp.dng.DngPreview
-import com.neuralcamera.isp.dng.DngRawImage
 import com.neuralcamera.isp.dng.DngReader
 import com.neuralcamera.isp.encode.DngMetadata
 import com.neuralcamera.isp.encode.DngWriter
@@ -96,7 +95,7 @@ object BurstMergeTool {
             images = images.map { img ->
                 val data = ShortArray(w * h)
                 for (row in 0 until h) System.arraycopy(img.mosaic.data, (y + row) * img.width + x, data, row * w, w)
-                DngRawImage(w, h, img.cfa, img.blackLevels, img.whiteLevel, img.noise, img.asShotNeutral, img.exposureTimeSeconds, img.iso, U16Plane(w, h, data), img.notes, img.colorMatrix1, img.forwardMatrix1, img.calibrationIlluminant1, img.uniqueCameraModel)
+                img.withMosaic(U16Plane(w, h, data))
             }
         }
         val width = images[0].width
@@ -213,6 +212,7 @@ object BurstMergeTool {
             "cfa" to first.cfa.name,
             "frontEnd" to frontEnd,
             "colorTransform" to transform.source.name,
+            "colorCalibration" to transform.note,
             "mergedDng" to dngStatus,
             "whiteLevel" to first.whiteLevel,
             "blackLevels" to ref.blackLevels.toList(),
