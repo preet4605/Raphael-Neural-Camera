@@ -141,6 +141,15 @@ adb shell pm grant com.neuralcamera.app.debug android.permission.CAMERA
 adb shell dumpsys thermalservice | head -20      # record; start only at status 0 (NONE)
 ```
 
+Profile re-audit (#7): launch the app once, then pull what the device reported and the per-field comparison with the
+committed profile. `MATCHES_METADATA` is metadata agreement only; `CONTRADICTED` fields must be fixed in the profile.
+
+```bash
+adb shell am start -n com.neuralcamera.app.debug/com.neuralcamera.app.MainActivity
+adb pull /sdcard/Android/data/com.neuralcamera.app.debug/files/profiles/runtime ./evidence/profile/
+cat ./evidence/profile/*/profile_verification.tsv
+```
+
 ### Gate 1: full-resolution RAW burst (sets `RAW_BURST_PROVEN`)
 
 ```bash

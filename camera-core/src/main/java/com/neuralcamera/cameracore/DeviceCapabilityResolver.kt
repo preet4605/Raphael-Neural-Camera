@@ -63,6 +63,9 @@ class DeviceCapabilityResolver(
         chars: CameraCharacteristics
     ): DiscoveredCameraProfile {
         val capabilitiesMap = mutableMapOf<String, CapabilityRecord<*>>()
+        val defaulted = mutableSetOf<String>()
+        fun <T> CameraCharacteristics.Key<T>.orDefault(default: T, name: String): T =
+            chars.get(this) ?: default.also { defaulted += name }
 
         // 1. Identity & Hardware Level
         val hardwareLevelInt = chars.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL)
@@ -76,7 +79,7 @@ class DeviceCapabilityResolver(
             else -> "UNKNOWN_$hardwareLevelInt"
         }
 
-        val lensFacingInt = chars.get(CameraCharacteristics.LENS_FACING) ?: CameraCharacteristics.LENS_FACING_BACK
+        val lensFacingInt = CameraCharacteristics.LENS_FACING.orDefault(CameraCharacteristics.LENS_FACING_BACK, "LENS_FACING")
         val lensFacing = when (lensFacingInt) {
             CameraCharacteristics.LENS_FACING_FRONT -> LensFacing.FRONT
             CameraCharacteristics.LENS_FACING_BACK -> LensFacing.BACK_WIDE
@@ -100,13 +103,13 @@ class DeviceCapabilityResolver(
         )
 
         // 2. Sensor Profile
-        val activeArray = chars.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE) ?: Rect(0, 0, 4000, 3000)
+        val activeArray = CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE.orDefault(Rect(0, 0, 4000, 3000), "SENSOR_INFO_ACTIVE_ARRAY_SIZE")
         val pixelArray = chars.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE) ?: Size(4000, 3000)
         val physicalSize = chars.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
         val rawIsoRange = chars.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
-        val isoRange: ClosedRange<Int> = if (rawIsoRange != null) rawIsoRange.lower..rawIsoRange.upper else 100..3200
+        val isoRange: ClosedRange<Int> = if (rawIsoRange != null) rawIsoRange.lower..rawIsoRange.upper else (100..3200).also { defaulted += "SENSOR_INFO_SENSITIVITY_RANGE" }
         val rawExpRange = chars.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
-        val expRange: ClosedRange<Long> = if (rawExpRange != null) rawExpRange.lower..rawExpRange.upper else 100_000L..1_000_000_000L
+        val expRange: ClosedRange<Long> = if (rawExpRange != null) rawExpRange.lower..rawExpRange.upper else (100_000L..1_000_000_000L).also { defaulted += "SENSOR_INFO_EXPOSURE_TIME_RANGE" }
         val maxFrameDuration = chars.get(CameraCharacteristics.SENSOR_INFO_MAX_FRAME_DURATION) ?: 33_333_333L
         val whiteLevel = chars.get(CameraCharacteristics.SENSOR_INFO_WHITE_LEVEL)
 
@@ -281,7 +284,8 @@ class DeviceCapabilityResolver(
             streams = streamsProfile,
             android16 = android16Profile,
             vendorExtensions = emptyList(),
-            capabilities = capabilitiesMap
+            capabilities = capabilitiesMap,
+            defaultedKeys = defaulted
         )
     }
 }
