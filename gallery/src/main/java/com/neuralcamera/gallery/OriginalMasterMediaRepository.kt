@@ -28,6 +28,8 @@ class OriginalMasterMediaRepository(
         processingMetadataJson: String,
         format: String
     ): SavedMediaItem {
+        // AI Studio outputs live in StudioStore; a Studio id can never become a camera bundle.
+        require(!mediaId.startsWith(com.neuralcamera.gallery.studio.StudioStore.ID_PREFIX)) { "$mediaId is a Studio id; camera storage refuses it" }
         val originalFile = File(storageDir, "${mediaId}_ORIGINAL.$format")
         val masterFile = File(storageDir, "${mediaId}_MASTER.$format")
         val metaFile = File(storageDir, "${mediaId}_META.json")
