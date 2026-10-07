@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-feature android:name="android.hardware.camera" android:required="true" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -9,6 +10,10 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
 
+    <!-- The app is offline-only. ONNX Runtime's AAR adds network permissions and a telemetry provider; strip them. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+
     <application
         android:name=".NeuralCameraApplication"
         android:allowBackup="false"
@@ -17,6 +22,13 @@
         android:roundIcon="@android:drawable/ic_menu_camera"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
+
+        <!-- Lets the app use FastRPC to reach the Hexagon DSP (HTP) from Android 12+. Optional so non-Qualcomm devices install. -->
+        <uses-native-library android:name="libcdsprpc.so" android:required="false" />
+
+        <provider
+            android:name="ai.onnxruntime.TelemetryInitializer"
+            tools:node="remove" />
 
         <activity
             android:name=".MainActivity"

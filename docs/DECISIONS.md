@@ -40,6 +40,7 @@
 - **Chosen approach**: Spatial tile confidence estimation combined with pixel divergence checking. High-confidence sensor regions are preserved by blending back ground truth or reverting the neural pass.
 - **Reason**: Protects photographic authenticity and user trust.
 - **Trade-offs**: Incurs slight compute latency (evaluating tile divergence maps) before saving.
+- **Status**: heuristic only. Reality Guard compares reconstructed and original luma; it has not been validated as hallucination detection, and it is a conceptual provenance distinction, not cryptographic or OEM-authenticated provenance.
 - **Future implications**: Establishes a verifiable quality gate required for professional photo certification.
 
 ---

@@ -2,7 +2,9 @@ package com.neuralcamera.deviceprofiles
 
 import com.neuralcamera.models.HardwareBackendType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -24,7 +26,11 @@ class DeviceProfileTest {
         val qnnBackend = profile.backends[HardwareBackendType.QUALCOMM_QNN_NPU]
         assertNotNull(qnnBackend)
         assertTrue(qnnBackend!!.isSupported)
-        assertTrue(qnnBackend.isUsable)
+        // Library presence is not execution proof: usable stays false until a backend-attributed run.
+        assertFalse(qnnBackend.isUsable)
+        assertNull(qnnBackend.latencyMultiplier)
+        assertFalse(profile.backends.getValue(HardwareBackendType.VULKAN_GPU).isUsable)
+        assertFalse(profile.isProfileVerifiedAtRuntime)
     }
 
     @Test

@@ -58,10 +58,14 @@ data class CameraProfile(
 
 data class BackendProfile(
     val backendType: HardwareBackendType,
+    /** Hardware/library presence only; not execution proof. */
     val isSupported: Boolean,
+    /** True only after a run with in-process backend attribution on this device. */
     val isUsable: Boolean,
-    val latencyMultiplier: Float,
-    val thermalEfficiencyScore: Float
+    /** Measured on-device; null until measured. */
+    val latencyMultiplier: Float? = null,
+    /** Measured on-device; null until measured. */
+    val thermalEfficiencyScore: Float? = null
 )
 
 data class ThermalLimits(

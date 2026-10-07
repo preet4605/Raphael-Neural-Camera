@@ -2,6 +2,7 @@ package com.neuralcamera.models
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -24,10 +25,29 @@ class ModelDescriptorTest {
     fun testPredefinedCatalogIntegrity() {
         val classical = PredefinedModelCatalog.CLASSICAL_BASELINE_ISP
         assertTrue(classical.isClassicalFallback)
-        assertEquals(ModelCompatibilityState.VERIFIED, classical.compatibilityState)
+        assertEquals(ModelCompatibilityState.UNVERIFIED, classical.compatibilityState)
 
         val neuralIsp = PredefinedModelCatalog.NEURAL_ISP_LITE
         assertNotNull(neuralIsp.fallbackModelId)
         assertEquals(classical.modelId, neuralIsp.fallbackModelId)
+    }
+
+    @Test
+    fun testCatalogClaimsNothingUnmeasured() {
+        val catalog = listOf(
+            PredefinedModelCatalog.CLASSICAL_BASELINE_ISP,
+            PredefinedModelCatalog.NEURAL_ISP_LITE,
+            PredefinedModelCatalog.PERCEPTION_SCENE_ALIGNMENT,
+            PredefinedModelCatalog.OMNI_NEURAL_4B_MOBILE,
+            PredefinedModelCatalog.FLUX_KLEIN_4B_STUDIO
+        )
+        for (model in catalog) {
+            assertEquals(model.modelId, ModelCompatibilityState.UNVERIFIED, model.compatibilityState)
+            assertNull(model.modelId, model.expectedLatencyMs)
+            assertNull(model.modelId, model.memoryRequirementBytes)
+            assertNull(model.modelId, model.thermalCostScore)
+            assertEquals(model.modelId, 0L, model.fileSizeBytes)
+            assertEquals(model.modelId, "UNSPECIFIED", model.license)
+        }
     }
 }

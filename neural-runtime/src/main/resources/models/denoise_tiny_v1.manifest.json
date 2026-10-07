@@ -1,0 +1,64 @@
+{
+  "modelId": "denoise-tiny-v1",
+  "description": "Untrained deterministic residual conv net for runtime validation; not a real denoiser.",
+  "seed": 20260925,
+  "inputShape": [
+    1,
+    1,
+    256,
+    256
+  ],
+  "layers": [
+    {
+      "in": 1,
+      "out": 8,
+      "kernel": 3,
+      "relu": true
+    },
+    {
+      "in": 8,
+      "out": 8,
+      "kernel": 3,
+      "relu": true
+    },
+    {
+      "in": 8,
+      "out": 1,
+      "kernel": 3,
+      "relu": false
+    }
+  ],
+  "residual": true,
+  "targetResidualRms": 0.06,
+  "files": {
+    "denoise_tiny_v1.weights.f32": {
+      "bytes": 2948,
+      "sha256": "7c62320d7b14db5554b04f746541d3092a4dab0fd4e6e5d1c0d41691cbe020e1"
+    },
+    "denoise_tiny_v1_fp32.onnx": {
+      "bytes": 3582,
+      "sha256": "5dc5e7086aa767b43e5cb3975b031e4b1121fa94279c7cd2972eea48d1144cae"
+    },
+    "denoise_tiny_v1_qdq_a16w8.onnx": {
+      "bytes": 4403,
+      "sha256": "89475c3e7edc39bf20ac90a5870f276bf351d5dd4dfc20e68d9f26ea6f2a426f"
+    },
+    "denoise_tiny_v1_qdq_a8w8.onnx": {
+      "bytes": 4139,
+      "sha256": "ee9f273989910ff2ed8847ea1c8d2a14d9e665fd40682e9eae1926460cc21ecf"
+    }
+  },
+  "generator": {
+    "numpy": "2.4.6",
+    "onnx": "1.23.1",
+    "onnxruntime": "1.30.0"
+  },
+  "hostEstimates": {
+    "psnrInputVsFp32OutputMaxDb": 24.47,
+    "psnrQdqCpuEpVsFp32MinDb": {
+      "a16w8": 85.17,
+      "a8w8": 55.23
+    },
+    "note": "CPU EP simulation of the QDQ graphs; not HTP evidence"
+  }
+}

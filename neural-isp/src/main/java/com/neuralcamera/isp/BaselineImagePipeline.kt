@@ -3,6 +3,12 @@ package com.neuralcamera.isp
 import com.neuralcamera.benchmarks.BenchmarkRunner
 import com.neuralcamera.benchmarks.StandardBenchmarkRunner
 import com.neuralcamera.cameracore.CameraFrame
+import com.neuralcamera.isp.temporal.FrameAnalysis
+import com.neuralcamera.isp.temporal.Frame
+import com.neuralcamera.isp.temporal.NoiseModel
+import com.neuralcamera.isp.temporal.Radiometry
+import com.neuralcamera.isp.temporal.TemporalMerge
+import com.neuralcamera.isp.temporal.AlignmentProxy
 import com.neuralcamera.quality.ConfidenceEstimator
 import com.neuralcamera.quality.GuardAction
 import com.neuralcamera.quality.QualityEvaluator
@@ -27,26 +33,25 @@ class BaselineImagePipeline(
         require(frames.isNotEmpty()) { "Cannot process empty frames list" }
 
         val (result, metrics) = benchmarkRunner.benchmarkStage("classical_baseline_isp") {
-            val refFrame = frames.last()
-            val width = refFrame.width
-            val height = refFrame.height
+            // Only 8-bit luma planes are handled here; RAW goes through BayerTemporalMerge.
+            val lumaPlanes = frames.map { LumaExtractor.toU16(it) }
+            val width = lumaPlanes[0].width
+            val height = lumaPlanes[0].height
             val pixelCount = width * height
+            require(lumaPlanes.all { it.width == width && it.height == height }) { "All frames must have the same size" }
 
-            val originalPlane = refFrame.planes.firstOrNull()?.buffer
-                ?: ByteArray(pixelCount) { 128.toByte() }
+            // 1. Temporal fusion: sharpest frame as reference, tile alignment, motion-robust noise-aware merge.
+            val referenceIndex = FrameAnalysis.sharpestIndex(lumaPlanes)
+            val refFrame = frames[referenceIndex]
+            val radiometry = Radiometry(blackLevel = 0.0, whiteLevel = 255.0)
+            val temporalFrames = lumaPlanes.map { Frame(it, radiometry) }
+            // 8-bit display-referred luma: homoscedastic noise, estimated from the reference frame itself.
+            val sigma = maxOf(FrameAnalysis.noiseSigma(AlignmentProxy.of(temporalFrames[referenceIndex])), MIN_SIGMA)
+            val merge = TemporalMerge.run(temporalFrames, referenceIndex, NoiseModel(shot = 0.0, read = sigma * sigma))
 
-            // 1. Temporal multi-frame noise reduction
-            val accumulatedLuma = IntArray(pixelCount)
-            for (f in frames) {
-                val plane = f.planes.firstOrNull()?.buffer ?: originalPlane
-                for (i in 0 until minOf(pixelCount, plane.size)) {
-                    accumulatedLuma[i] += (plane[i].toInt() and 0xFF)
-                }
-            }
-            val frameCount = frames.size
-            val reconstructedLuma = ByteArray(pixelCount)
-            for (i in 0 until pixelCount) {
-                reconstructedLuma[i] = (accumulatedLuma[i] / frameCount).coerceIn(0, 255).toByte()
+            val originalPlane = ByteArray(pixelCount) { lumaPlanes[referenceIndex].data[it].toByte() }
+            val reconstructedLuma = ByteArray(pixelCount) {
+                Math.round(merge.output.data[it].coerceIn(0f, 1f) * 255f).toByte()
             }
 
             // 2. Confidence Estimation
@@ -83,18 +88,27 @@ class BaselineImagePipeline(
                 GuardAction.KEEP_RECONSTRUCTED, GuardAction.DISCARD_NEURAL_STAGE -> reconstructedLuma
             }
 
-            // Convert to RGB master buffer
+            // Convert to RGB master buffer. Luma is the merged result; colour comes from the reference frame's own
+            // chroma planes when the frame has them (chroma is NOT temporally merged), otherwise the output is gray.
+            val chroma = ChromaExtractor.toFullRes(refFrame)
             val masterRgb = ByteArray(pixelCount * 3)
             for (i in 0 until pixelCount) {
                 val luma = finalLuma[i].toInt() and 0xFF
-                // S-curve subtle contrast enhancement (classical photographic tone curve)
+                // S-curve subtle contrast enhancement (classical photographic tone curve), applied to luma only
                 val normalized = luma / 255.0
-                val curved = (normalized * normalized * (3 - 2 * normalized) * 255.0).toInt().coerceIn(0, 255).toByte()
-
+                val y = normalized * normalized * (3 - 2 * normalized) * 255.0
                 val rgbIdx = i * 3
-                masterRgb[rgbIdx] = curved     // R
-                masterRgb[rgbIdx + 1] = curved // G
-                masterRgb[rgbIdx + 2] = curved // B
+                if (chroma == null) {
+                    val g = y.toInt().coerceIn(0, 255).toByte()
+                    masterRgb[rgbIdx] = g; masterRgb[rgbIdx + 1] = g; masterRgb[rgbIdx + 2] = g
+                } else {
+                    // BT.601 full-range YCbCr, the JFIF convention Camera2 YUV_420_888 uses.
+                    val cb = (chroma.cb[i].toInt() and 0xFF) - 128.0
+                    val cr = (chroma.cr[i].toInt() and 0xFF) - 128.0
+                    masterRgb[rgbIdx] = Math.round(y + 1.402 * cr).toInt().coerceIn(0, 255).toByte()
+                    masterRgb[rgbIdx + 1] = Math.round(y - 0.344136 * cb - 0.714136 * cr).toInt().coerceIn(0, 255).toByte()
+                    masterRgb[rgbIdx + 2] = Math.round(y + 1.772 * cb).toInt().coerceIn(0, 255).toByte()
+                }
             }
 
             // 5. Quality Evaluation
@@ -117,10 +131,17 @@ class BaselineImagePipeline(
                     isSuccess = true
                 ),
                 isNeuralAccelerated = false,
-                appliedPipelineName = "Classical Production ISP Baseline (Multi-frame Temporal Fusion)"
+                isColour = chroma != null,
+                temporalStats = merge.frameStats,
+                appliedPipelineName = "Classical baseline ISP (tile-aligned, noise-aware, motion-robust temporal merge on luma; chroma from the reference frame)"
             )
         }
 
         return result.copy(metrics = metrics)
+    }
+
+    private companion object {
+        /** About half an 8-bit quantization step; keeps noise-free input from producing a zero tolerance. */
+        const val MIN_SIGMA = 0.5 / 255.0
     }
 }

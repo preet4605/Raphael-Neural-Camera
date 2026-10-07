@@ -8,6 +8,9 @@ In accordance with Rule 32 ("Every major optimization must be benchmarked") and 
 ---
 
 ## 2. SLA Latency & Memory Targets
+
+These are targets, not results. For the first HTP proof, the Gate 2 targets in [`PROOF_GATES.md`](PROOF_GATES.md) govern (PSNR >= 35 dB vs FP32, p95 <= 100 ms over 300 inferences).
+
 | Pipeline Stage | Target Latency (p95) | Max Heap Allocation | Target Accuracy / PSNR |
 |---|---|---|---|
 | Frame Acquisition & Sync | $\le 2\text{ ms}$ | $0\text{ bytes}$ (recycled) | 100% frame metadata sync |
@@ -21,7 +24,9 @@ In accordance with Rule 32 ("Every major optimization must be benchmarked") and 
 
 ## 3. Phase 1 Preview Frame Rate & Latency Baseline (Section 31)
 
-Measured on OnePlus 15 reference device:
+> **UNVERIFIED.** The figures below come from the committed profile JSONs, which have no raw logs. Do not cite them as measurements.
+
+Claimed for the OnePlus 15 reference device:
 - **Requested Target FPS**: 60.0 FPS (16.67 ms frame deadline).
 - **Observed Preview FPS**: 59.8 FPS.
 - **Frame Interval Distribution**:
@@ -36,7 +41,9 @@ Measured on OnePlus 15 reference device:
 
 ## 4. Phase 1 Memory Benchmarks & Residency Limits (Section 32)
 
-Empirical memory consumption across camera operational states:
+> **UNVERIFIED.** The figures below come from the committed profile JSONs, which have no raw logs. Do not cite them as measurements.
+
+Claimed memory consumption across camera operational states (the app cannot currently perform these bursts):
 - **Base Process Resident (RSS)**: 112 MB
 - **Preview Only (SurfaceView PSS)**: 138 MB
 - **Preview + Analysis Stream (PSS)**: 174 MB
@@ -48,6 +55,10 @@ Empirical memory consumption across camera operational states:
 ---
 
 ## 5. Phase 1 IMU Timestamp Synchronization & Clock Jitter (Section 18)
+
+> **UNVERIFIED.** The figures below come from the committed profile JSONs, which have no raw logs. Do not cite them as measurements.
+
+Drift-free or sub-millisecond synchronization must not be claimed without direct measurement.
 
 - **Sensor Hardware**: STMicroelectronics `lsm6dsv` 6-axis Gyroscope and Accelerometer.
 - **Clock Domain**: Monotonic `CLOCK_BOOTTIME` shared across Camera2 `SENSOR_TIMESTAMP` and SensorEvent `timestamp`.

@@ -1,4 +1,6 @@
 {
+  "evidenceStatus": "UNVERIFIED",
+  "evidenceNote": "No raw audit or capture logs are committed, and the timestamp field (1727222400000 = 2024-09-25) contradicts the 20260925 folder name and the Android 16 device. Treat every value as an unverified claim; do not cite it as evidence for any proof gate until the raw logs are added. No Camera2 preview timing log backs these figures.",
   "appVersion": "1.0.0",
   "buildIdentifier": "com.neuralcamera.app.debug-v1",
   "timestamp": 1727222400000,

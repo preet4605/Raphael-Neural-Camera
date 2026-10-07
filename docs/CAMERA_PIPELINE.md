@@ -100,9 +100,11 @@ Interrogated from physical host OnePlus 15 (CPH2745, Android 16 API 36, SM8850 S
 
 ---
 
+> The classical temporal merge (alignment, motion-robust merge, RAW Bayer wrapper) is documented in [`TEMPORAL_PIPELINE.md`](TEMPORAL_PIPELINE.md). It is implemented and synthetic-data validated, and is not yet wired to this capture path.
+
 ## 7. Stream Configuration Matrix
 
-Validated via `CameraSessionPlanner` and `StreamMatrixTester`:
+Planned via `CameraSessionPlanner` and tested by `StreamMatrixTester`. The status and latency values below come from the unverified profile data (no run log) and are not measurements:
 | Stream Combination | Target Streams | Hardware Status | Latency |
 |---|---|---|---|
 | Preview Only | SurfaceView (1920x1080) | SUPPORTED | 8 ms |
@@ -137,13 +139,13 @@ Validated via `CameraSessionPlanner` and `StreamMatrixTester`:
 `SensorTimelineSynchronizer` integrates hardware IMU telemetry:
 - Sensors: STMicroelectronics `lsm6dsv` Accelerometer and Gyroscope sampled at ~479.85 Hz (~480 Hz nominal).
 - Clock Domain: Both Camera2 `SENSOR_TIMESTAMP` and `SensorEvent.timestamp` reside in monotonic `CLOCK_BOOTTIME`.
-- Temporal Synchronization: Linear interpolation $(v = v_0 + (v_1 - v_0) \cdot \alpha)$ computes motion vectors at exact shutter timestamps with median jitter $< 0.4\text{ms}$.
+- Temporal Synchronization: Linear interpolation $(v = v_0 + (v_1 - v_0) \cdot \alpha)$ computes motion vectors at exact shutter timestamps (jitter and accuracy not yet measured).
 
 ---
 
 ## 11. Zero-Copy Audit & Buffer Copies
 
-Audited via `ZeroCopyAuditor` (Section 13 and Section 41):
+Audited via `ZeroCopyAuditor` (Section 13 and Section 41). Statuses below are claims from unverified profile data. Never assume zero-copy; measure the actual transfers:
 - **Camera HAL -> SurfaceView**: 0 copies (Direct SurfaceFlinger hardware scanout overlay, VERIFIED).
 - **Camera HAL -> HardwareBuffer**: 0 copies (Direct `AHardwareBuffer` mapping to Vulkan/QNN memory; DESIGNED, model execution NOT_TESTED in Phase 1).
 - **Camera HAL -> ImageReader ByteBuffer -> JVM**: 1 copy (Occurs only when CPU requests JVM `ByteArray` copies).

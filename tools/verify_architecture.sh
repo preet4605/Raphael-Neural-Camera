@@ -43,6 +43,8 @@ REQUIRED_DOCS=(
     "docs/MODEL_REGISTRY.md"
     "docs/BENCHMARKING.md"
     "docs/DECISIONS.md"
+    "docs/PROOF_GATES.md"
+    "docs/TEMPORAL_PIPELINE.md"
 )
 
 for doc in "${REQUIRED_DOCS[@]}"; do

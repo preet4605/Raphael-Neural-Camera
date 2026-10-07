@@ -24,5 +24,8 @@ enum class SemanticPurpose {
     GENERATIVE,
 
     /** Optional high-level semantic director (natural language assistance, scene reasoning). */
-    SEMANTIC_DIRECTOR
+    SEMANTIC_DIRECTOR,
+
+    /** Deterministic test networks used only to validate runtime numerics, latency and backend attribution. Never in the camera path. */
+    RUNTIME_VALIDATION
 }

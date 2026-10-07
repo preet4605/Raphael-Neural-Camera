@@ -77,10 +77,10 @@ graph TD
 1. `:models`: Strict model descriptors, precision types (FP32, FP16, INT8, INT4), hardware backend targets, compatibility contracts, and manifest validators.
 2. `:device-profiles`: Declarative versioned device capabilities, camera specs, thermal thresholds, and device profiles (OnePlus 15, Generic Flagship, Generic Fallback).
 3. `:benchmarks`: Empirical benchmarking engine, latency percentiles (median, p95, p99), memory peak tracking, privacy-safe telemetry, and 13-category structured logger.
-4. `:quality-engine`: Image quality evaluator, sensor confidence estimator, and Reality Guard hallucination protection.
+4. `:quality-engine`: Image quality evaluator, sensor confidence estimator, and the Reality Guard heuristic divergence check (not hallucination detection or provenance).
 5. `:camera-core`: Camera2 contracts, deterministic state machine (`CameraState`), structured error hierarchy (`CameraSystemError`), buffer leasing contracts (`FrameBufferHandle`), and bounded ring buffer repositories.
 6. `:capture-intelligence`: Scene luminance & motion estimation, universal capture planning across shooting modes (AUTO, PRO, MASTER, AUTHENTIC).
-7. `:neural-runtime`: Model registry, adaptive scheduler, thermal budget manager, memory allocation manager, hardware backends, and `InferenceRuntime`.
+7. `:neural-runtime`: Model registry, adaptive scheduler, thermal budget manager, memory allocation manager, the `InferenceRuntime`/`InferenceBackend` contracts with in-process attribution, the FP32 CPU reference backend, an ONNX Runtime backend (CPU EP, QNN EP on the HTP) and the Gate 2 proof harness. No hardware execution has been observed yet.
 8. `:neural-isp`: Multi-frame temporal fusion, classical baseline ISP fallback pipeline (Zero Fake AI).
 9. `:video-engine`: Video pipeline enforcing bounded compute per frame (selective keyframe enhancement, hardware passthrough).
 10. `:gallery`: Non-destructive dual-storage repository (Original + Master + JSON metadata).
@@ -163,7 +163,10 @@ In adherence to Section 18 of the Constitution:
 
 ---
 
-## 8. Phase 1 Implementation & Scope Boundary
+## 8. Phase Status, Phase 1 Implementation & Scope Boundary
+
+- **Current state**: Phase 0 (foundation) and Phase 1 (hardware discovery / device profile) are complete in code. **Phase 2 (neural runtime foundation) is IN PROGRESS: the backends and the Gate 2 harness exist but have never run on the device.** Earlier commit messages calling Phase 2 complete were wrong when written. All proof flags are `FALSE`; see [`PROOF_GATES.md`](PROOF_GATES.md).
+- **Known gaps in the Phase 1 list below**: `triggerBurstCapture` returns no frames (no burst acquisition); the diagnostics sheet fields read `N/A` until measured; the committed OnePlus 15 profile data is **UNVERIFIED** (no raw audit logs; its timestamps contradict its folder name); no encoder produces valid JPEG/DNG.
 
 - **Phase 1 Scope Completed**:
   - Real Camera2 capability resolver (`DeviceCapabilityResolver`) interrogating identity, sensor active array, focal lengths, apertures, 3A modes, stream formats, dynamic range profiles, stream use cases, and Android 16 capabilities.
@@ -176,10 +179,10 @@ In adherence to Section 18 of the Constitution:
   - Decoupled `CaptureResultAssociator` tolerating delayed metadata, delayed images, and dropped frames.
   - `SensorTimelineSynchronizer` validating `CLOCK_BOOTTIME` domain and interpolating gyro/accel samples.
   - `ZeroCopyAuditor` auditing memory movements and evaluating zero-copy gates.
-  - Full debug camera diagnostic sheet (`CameraDiagnosticsSheet`) displaying all 20 required telemetry fields.
+  - Debug camera diagnostic sheet (`CameraDiagnosticsSheet`) with all 20 required telemetry fields (each reads `N/A` until a real measurement populates it).
   - Deterministic state machine integration and bounded error recovery in `RealCamera2Controller`.
   - ADB developer tooling (`tools/camera_dev_tools.sh`).
-  - Runtime capability profiles generated at `profiles/runtime/OnePlus_15/20260925_000000/` reflecting authoritative hardware re-audit: SM8850 / canoe (Snapdragon 8 Elite Gen 5), 3rd-generation Qualcomm Oryon CPU, Qualcomm Adreno 840 GPU, Qualcomm Hexagon HTP V81 cDSP, 5 LEVEL_3 cameras [0, 1, 2, 3, 4], and STMicroelectronics lsm6dsv 480Hz IMU.
+  - Runtime capability profile data committed at `profiles/runtime/OnePlus_15/20260925_000000/` (**UNVERIFIED**: no raw logs) describing the claimed hardware re-audit: SM8850 / canoe (Snapdragon 8 Elite Gen 5), 3rd-generation Qualcomm Oryon CPU, Qualcomm Adreno 840 GPU, Qualcomm Hexagon HTP V81 cDSP, 5 LEVEL_3 cameras [0, 1, 2, 3, 4], and STMicroelectronics lsm6dsv 480Hz IMU.
 
 - **Strictly Deferred to Future Phases (Do Not Implement in Phase 1)**:
   - Neural ISP models, deep denoising, deblurring.

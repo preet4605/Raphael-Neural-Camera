@@ -29,30 +29,33 @@ import com.neuralcamera.ui.theme.NeuralActiveGreen
 import com.neuralcamera.ui.theme.PrecisionAmber
 import com.neuralcamera.ui.theme.StudioWhite
 
+private const val NOT_AVAILABLE = "N/A"
+
 /**
  * Diagnostic telemetry data model encompassing all 20 fields mandated by Section 34.
+ * Every field reads N/A until a real measurement populates it.
  */
 data class CameraDiagnosticsData(
-    val cameraId: String = "0",
-    val lensFacing: String = "BACK_WIDE",
-    val physicalCameraId: String = "0",
-    val resolution: String = "4000x3000 (12 MP)",
-    val format: String = "RAW_SENSOR / YUV_420_888",
-    val fps: Float = 59.8f,
-    val iso: Int = 100,
-    val exposureTimeNs: Long = 10_000_000L, // 1/100s
-    val focusState: String = "LOCKED_FOCUSED (1.2m)",
-    val aeState: String = "CONVERGED",
-    val awbState: String = "CONVERGED",
-    val frameNumber: Long = 1420L,
-    val timestampNs: Long = 284920491823L,
-    val queueDepth: Int = 2,
-    val droppedFrames: Long = 0L,
-    val memoryUsageMb: Long = 184L,
-    val sessionConfiguration: String = "PREVIEW (1080p) + STILL (RAW10)",
-    val dynamicRange: String = "HLG10 / SDR",
-    val zslState: String = "STANDBY (Ring Bounded)",
-    val sensorSync: String = "SYNCED (avg offset 1.2ms, jitter 0.4ms)"
+    val cameraId: String = NOT_AVAILABLE,
+    val lensFacing: String = NOT_AVAILABLE,
+    val physicalCameraId: String = NOT_AVAILABLE,
+    val resolution: String = NOT_AVAILABLE,
+    val format: String = NOT_AVAILABLE,
+    val fps: Float? = null,
+    val iso: Int? = null,
+    val exposureTimeNs: Long? = null,
+    val focusState: String = NOT_AVAILABLE,
+    val aeState: String = NOT_AVAILABLE,
+    val awbState: String = NOT_AVAILABLE,
+    val frameNumber: Long? = null,
+    val timestampNs: Long? = null,
+    val queueDepth: Int? = null,
+    val droppedFrames: Long? = null,
+    val memoryUsageMb: Long? = null,
+    val sessionConfiguration: String = NOT_AVAILABLE,
+    val dynamicRange: String = NOT_AVAILABLE,
+    val zslState: String = NOT_AVAILABLE,
+    val sensorSync: String = NOT_AVAILABLE
 )
 
 /**
@@ -89,7 +92,7 @@ fun CameraDiagnosticsSheet(
                     fontFamily = FontFamily.Monospace
                 )
                 Text(
-                    text = "${data.fps} FPS",
+                    text = data.fps?.let { "$it FPS" } ?: "FPS $NOT_AVAILABLE",
                     color = NeuralActiveGreen,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
@@ -104,16 +107,19 @@ fun CameraDiagnosticsSheet(
             DiagnosticRow("Physical Camera ID", data.physicalCameraId)
             DiagnosticRow("Active Resolution", data.resolution)
             DiagnosticRow("Hardware Format", data.format)
-            DiagnosticRow("ISO Sensitivity", "${data.iso}")
-            DiagnosticRow("Exposure Time", "${data.exposureTimeNs / 1_000_000} ms (1/${(1_000_000_000L / data.exposureTimeNs.coerceAtLeast(1))}s)")
+            DiagnosticRow("ISO Sensitivity", data.iso?.toString() ?: NOT_AVAILABLE)
+            DiagnosticRow(
+                "Exposure Time",
+                data.exposureTimeNs?.let { "${it / 1_000_000} ms (1/${1_000_000_000L / it.coerceAtLeast(1)}s)" } ?: NOT_AVAILABLE
+            )
             DiagnosticRow("Focus Distance", data.focusState)
             DiagnosticRow("Auto Exposure (AE)", data.aeState)
             DiagnosticRow("Auto White Balance", data.awbState)
-            DiagnosticRow("Frame Sequence #", "${data.frameNumber}")
-            DiagnosticRow("Sensor Timestamp", "${data.timestampNs} ns")
-            DiagnosticRow("Buffer Queue Depth", "${data.queueDepth} frames")
-            DiagnosticRow("Dropped Frames", "${data.droppedFrames}")
-            DiagnosticRow("Process Memory (PSS)", "${data.memoryUsageMb} MB / 512 MB ceiling")
+            DiagnosticRow("Frame Sequence #", data.frameNumber?.toString() ?: NOT_AVAILABLE)
+            DiagnosticRow("Sensor Timestamp", data.timestampNs?.let { "$it ns" } ?: NOT_AVAILABLE)
+            DiagnosticRow("Buffer Queue Depth", data.queueDepth?.let { "$it frames" } ?: NOT_AVAILABLE)
+            DiagnosticRow("Dropped Frames", data.droppedFrames?.toString() ?: NOT_AVAILABLE)
+            DiagnosticRow("Process Memory (PSS)", data.memoryUsageMb?.let { "$it MB" } ?: NOT_AVAILABLE)
             DiagnosticRow("Session Configuration", data.sessionConfiguration)
             DiagnosticRow("Dynamic Range Profile", data.dynamicRange)
             DiagnosticRow("Zero Shutter Lag (ZSL)", data.zslState)

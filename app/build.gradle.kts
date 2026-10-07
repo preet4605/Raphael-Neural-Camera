@@ -15,6 +15,10 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -38,6 +42,22 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        jniLibs {
+            // The Hexagon skel libraries are loaded by the DSP from the filesystem, so native libs must be extracted.
+            useLegacyPackaging = true
+            // Keep only what a Snapdragon 8 Elite Gen 5 (HTP V81) needs. Remove these lines to run on other SoCs.
+            excludes += setOf(
+                "**/libQnnDsp*.so",
+                "**/libQnnGpu.so",
+                "**/libQnnHtpV68*.so",
+                "**/libQnnHtpV69*.so",
+                "**/libQnnHtpV73*.so",
+                "**/libQnnHtpV75*.so",
+                "**/libQnnHtpV79*.so"
+            )
+        }
+    }
 }
 
 dependencies {
@@ -54,6 +74,7 @@ dependencies {
     implementation(project(":ui"))
     implementation(project(":data-lab"))
 
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.10.0")
     implementation("androidx.compose.ui:ui:1.7.8")

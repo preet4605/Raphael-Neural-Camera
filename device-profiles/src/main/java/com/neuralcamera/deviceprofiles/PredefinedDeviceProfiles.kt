@@ -168,23 +168,27 @@ object PredefinedDeviceProfiles {
             HardwareBackendType.QUALCOMM_QNN_NPU to BackendProfile(
                 backendType = HardwareBackendType.QUALCOMM_QNN_NPU,
                 isSupported = true,
-                isUsable = true,
-                latencyMultiplier = 0.6f,
-                thermalEfficiencyScore = 0.95f
+                isUsable = false
             ),
             HardwareBackendType.VULKAN_GPU to BackendProfile(
                 backendType = HardwareBackendType.VULKAN_GPU,
                 isSupported = true,
-                isUsable = true,
-                latencyMultiplier = 0.9f,
-                thermalEfficiencyScore = 0.80f
+                isUsable = false
+            ),
+            HardwareBackendType.ORT_CPU to BackendProfile(
+                backendType = HardwareBackendType.ORT_CPU,
+                isSupported = true,
+                isUsable = false // until an on-device run proves ONNX Runtime loads and executes
             ),
             HardwareBackendType.XNNPACK_CPU to BackendProfile(
                 backendType = HardwareBackendType.XNNPACK_CPU,
                 isSupported = true,
-                isUsable = true,
-                latencyMultiplier = 2.5f,
-                thermalEfficiencyScore = 0.50f
+                isUsable = false // XNNPACK is not integrated yet
+            ),
+            HardwareBackendType.CPU_REFERENCE to BackendProfile(
+                backendType = HardwareBackendType.CPU_REFERENCE,
+                isSupported = true,
+                isUsable = true // pure Kotlin, no hardware dependency; guaranteed fallback
             )
         ),
         thermalLimits = ThermalLimits(
@@ -200,7 +204,7 @@ object PredefinedDeviceProfiles {
             maxModelResidencyBytes = 2500 * 1024 * 1024L, // 2.5GB
             maxIntermediateTensorBytes = 256 * 1024 * 1024L // 256MB
         ),
-        isProfileVerifiedAtRuntime = true
+        isProfileVerifiedAtRuntime = false
     )
 
     val GENERIC_FLAGSHIP = DeviceProfile(
@@ -229,16 +233,22 @@ object PredefinedDeviceProfiles {
             HardwareBackendType.VULKAN_GPU to BackendProfile(
                 backendType = HardwareBackendType.VULKAN_GPU,
                 isSupported = true,
-                isUsable = true,
-                latencyMultiplier = 1.0f,
-                thermalEfficiencyScore = 0.75f
+                isUsable = false
+            ),
+            HardwareBackendType.ORT_CPU to BackendProfile(
+                backendType = HardwareBackendType.ORT_CPU,
+                isSupported = true,
+                isUsable = false // until an on-device run proves ONNX Runtime loads and executes
             ),
             HardwareBackendType.XNNPACK_CPU to BackendProfile(
                 backendType = HardwareBackendType.XNNPACK_CPU,
                 isSupported = true,
-                isUsable = true,
-                latencyMultiplier = 3.0f,
-                thermalEfficiencyScore = 0.45f
+                isUsable = false // XNNPACK is not integrated yet
+            ),
+            HardwareBackendType.CPU_REFERENCE to BackendProfile(
+                backendType = HardwareBackendType.CPU_REFERENCE,
+                isSupported = true,
+                isUsable = true // pure Kotlin, no hardware dependency; guaranteed fallback
             )
         ),
         thermalLimits = ThermalLimits(),
@@ -276,9 +286,12 @@ object PredefinedDeviceProfiles {
             HardwareBackendType.XNNPACK_CPU to BackendProfile(
                 backendType = HardwareBackendType.XNNPACK_CPU,
                 isSupported = true,
-                isUsable = true,
-                latencyMultiplier = 4.0f,
-                thermalEfficiencyScore = 0.40f
+                isUsable = false // XNNPACK is not integrated yet
+            ),
+            HardwareBackendType.CPU_REFERENCE to BackendProfile(
+                backendType = HardwareBackendType.CPU_REFERENCE,
+                isSupported = true,
+                isUsable = true // pure Kotlin, no hardware dependency; guaranteed fallback
             )
         ),
         thermalLimits = ThermalLimits(

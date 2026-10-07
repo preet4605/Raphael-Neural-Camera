@@ -28,13 +28,16 @@ data class ModelDescriptor(
     val outputResolution: Pair<Int, Int>,
     val tensorPrecision: TensorPrecision,
     val supportedBackends: List<HardwareBackendType>,
-    val memoryRequirementBytes: Long,
-    val expectedLatencyMs: Long,
-    val thermalCostScore: Float, // 0.0 (negligible) to 1.0 (extreme)
+    /** Measured on-device; null until measured. */
+    val memoryRequirementBytes: Long?,
+    /** Measured on-device; null until measured. */
+    val expectedLatencyMs: Long?,
+    /** 0.0 (negligible) to 1.0 (extreme); measured on-device, null until measured. */
+    val thermalCostScore: Float?,
     val compatibilityRequirements: List<String>,
     val fallbackModelId: String? = null,
     val isClassicalFallback: Boolean = false,
-    val compatibilityState: ModelCompatibilityState = ModelCompatibilityState.AVAILABLE,
+    val compatibilityState: ModelCompatibilityState = ModelCompatibilityState.UNVERIFIED,
     val inputDescription: String = "$inputFormat at ${inputResolution.first}x${inputResolution.second}",
     val outputDescription: String = "$outputFormat at ${outputResolution.first}x${outputResolution.second}",
     val qualityMetrics: QualityMetricsExpectation? = null
@@ -42,8 +45,8 @@ data class ModelDescriptor(
     // Aliases ensuring 100% adherence to Section 14 naming
     val size: Long get() = fileSizeBytes
     val precision: TensorPrecision get() = tensorPrecision
-    val memoryRequirement: Long get() = memoryRequirementBytes
-    val latencyExpectation: Long get() = expectedLatencyMs
+    val memoryRequirement: Long? get() = memoryRequirementBytes
+    val latencyExpectation: Long? get() = expectedLatencyMs
     val fallback: String? get() = fallbackModelId
     val compatibility: List<String> get() = compatibilityRequirements
 }
@@ -67,17 +70,27 @@ object ModelManifestValidator {
         if (descriptor.license.isBlank()) {
             issues.add("license cannot be blank")
         }
-        if (!descriptor.isClassicalFallback && descriptor.size <= 0) {
-            issues.add("Neural model size must be greater than 0 bytes")
+        val isVerified = descriptor.compatibilityState == ModelCompatibilityState.VERIFIED
+        if (descriptor.size < 0) {
+            issues.add("fileSizeBytes cannot be negative")
+        }
+        if (isVerified && !descriptor.isClassicalFallback && descriptor.size == 0L) {
+            issues.add("Verified neural model must reference a model artifact (size > 0)")
         }
         if (descriptor.supportedBackends.isEmpty()) {
             issues.add("supportedBackends cannot be empty")
         }
-        if (descriptor.memoryRequirement <= 0) {
-            issues.add("memoryRequirement must be positive")
+        descriptor.memoryRequirement?.let {
+            if (it <= 0) issues.add("memoryRequirement must be positive when specified")
         }
-        if (descriptor.latencyExpectation <= 0) {
-            issues.add("latencyExpectation must be positive")
+        descriptor.latencyExpectation?.let {
+            if (it <= 0) issues.add("latencyExpectation must be positive when specified")
+        }
+        if (isVerified && descriptor.memoryRequirement == null) {
+            issues.add("Verified model must declare a measured memoryRequirement")
+        }
+        if (isVerified && descriptor.latencyExpectation == null) {
+            issues.add("Verified model must declare a measured latencyExpectation")
         }
         if (descriptor.inputDescription.isBlank()) {
             issues.add("inputDescription cannot be blank")

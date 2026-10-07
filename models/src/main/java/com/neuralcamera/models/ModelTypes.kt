@@ -13,10 +13,19 @@ enum class HardwareBackendType {
     VULKAN_GPU,
     XNNPACK_CPU,
     OPENCL_GPU,
-    NNAPI_FALLBACK
+    NNAPI_FALLBACK,
+
+    /** Pure-Kotlin FP32 golden reference (double accumulation). Correctness oracle, not optimized. */
+    CPU_REFERENCE,
+
+    /** ONNX Runtime CPU execution provider. Real optimized CPU path; never counts as accelerator evidence. */
+    ORT_CPU
 }
 
 enum class ModelCompatibilityState {
+    /** No on-device execution evidence exists. Any metric on the descriptor is unmeasured. */
+    UNVERIFIED,
+
     /** Hardware execution verified with real benchmark meeting SLA. */
     VERIFIED,
 

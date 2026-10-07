@@ -1,4 +1,6 @@
 {
+  "evidenceStatus": "UNVERIFIED",
+  "evidenceNote": "No raw audit or capture logs are committed, and the timestamp field (1727222400000 = 2024-09-25) contradicts the 20260925 folder name and the Android 16 device. Treat every value as an unverified claim; do not cite it as evidence for any proof gate until the raw logs are added. The status below was changed from PASS to UNVERIFIED; executionGates values are likewise unverified claims.",
   "phase": 1,
   "appVersion": "1.0.0",
   "buildIdentifier": "com.neuralcamera.app.debug-v1",
@@ -27,6 +29,6 @@
     "vulkanModelExecution": "NOT_TESTED",
     "halDirectHeicUltraHdr": "DISABLED_BY_HAL"
   },
-  "status": "PASS — AUTHORITATIVE HARDWARE RE-AUDIT INGESTED",
+  "status": "UNVERIFIED — raw audit logs not committed",
   "notes": "Direct physical hardware interrogation via shell UID 2000 successfully ingested into project baseline. All 5 cameras verified at LEVEL_3. QNN and Vulkan model execution and hardware buffer zero-copy pipelines marked NOT_TESTED in Phase 1 (reserved for Phase 2 neural runtime validation). Direct HAL HEIF Ultra HDR confirmed disabled by vendor property ro.camera.disableHeicUltraHDR=true."
 }
