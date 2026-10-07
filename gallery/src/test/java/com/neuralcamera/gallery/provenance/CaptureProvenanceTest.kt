@@ -63,4 +63,13 @@ class CaptureProvenanceTest {
         assertEquals(StageStatus.DEGRADED, p.stages[2].status)
         assertEquals(ContentOrigin.CAPTURED, p.outputOrigin)
     }
+
+    @Test
+    fun mergedChromaIsRecordedAsReconstructedColour() {
+        val p = CaptureProvenance.forBurst("m5", burst(6, 6, OrchestrationState.COMPLETE), cleanMerge.copy(chromaMerged = true))
+        assertEquals(ContentOrigin.RECONSTRUCTED, p.stages[2].origin)
+        assertEquals("camera chroma merged along the luma motion", p.stages[2].implementation)
+        val unmerged = CaptureProvenance.forBurst("m6", burst(6, 6, OrchestrationState.COMPLETE), cleanMerge)
+        assertEquals(ContentOrigin.CAPTURED, unmerged.stages[2].origin)
+    }
 }

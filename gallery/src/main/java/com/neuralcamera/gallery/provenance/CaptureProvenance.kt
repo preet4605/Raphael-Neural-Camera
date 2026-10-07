@@ -14,7 +14,9 @@ data class MergeFacts(
     val blendRatio: Float,
     /** Every frame failed the quality checks and the sharpest was used as reference anyway. */
     val referenceFallback: Boolean,
-    val colour: Boolean
+    val colour: Boolean,
+    /** Chroma was merged along the luma motion (false: the reference frame's chroma). */
+    val chromaMerged: Boolean = false
 )
 
 /**
@@ -28,7 +30,7 @@ object CaptureProvenance {
         val stages = listOf(
             ProvenanceRecord.recordOf(captureOutcome(burst), ContentOrigin.CAPTURED),
             mergeRecord(merge),
-            ProvenanceRecord.recordOf(colourOutcome(merge.colour), ContentOrigin.CAPTURED)
+            ProvenanceRecord.recordOf(colourOutcome(merge.colour, merge.chromaMerged), if (merge.chromaMerged) ContentOrigin.RECONSTRUCTED else ContentOrigin.CAPTURED)
         )
         return ProvenanceRecord(
             mediaId = mediaId,
@@ -70,7 +72,9 @@ object CaptureProvenance {
         return ProvenanceRecord.recordOf(outcome, origin)
     }
 
-    private fun colourOutcome(colour: Boolean): StageOutcome<Unit> =
-        if (colour) StageOutcome.Success("colour", Unit, "camera chroma from the reference frame (not merged)")
-        else StageOutcome.Degraded("colour", Unit, "colour from chroma planes", "grayscale", "frames had no chroma planes")
+    private fun colourOutcome(colour: Boolean, merged: Boolean): StageOutcome<Unit> = when {
+        colour && merged -> StageOutcome.Success("colour", Unit, "camera chroma merged along the luma motion")
+        colour -> StageOutcome.Success("colour", Unit, "camera chroma from the reference frame (not merged)")
+        else -> StageOutcome.Degraded("colour", Unit, "colour from chroma planes", "grayscale", "frames had no chroma planes")
+    }
 }

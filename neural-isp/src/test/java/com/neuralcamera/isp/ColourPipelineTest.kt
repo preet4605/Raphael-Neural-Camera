@@ -43,6 +43,8 @@ class ColourPipelineTest {
             blue += r.masterRgbPlane[i * 3 + 2].toInt() and 255
         }
         assertTrue("R=$red G=$green B=$blue", red > green + w * h * 20 && red > blue + w * h * 20)
+        assertTrue(r.chromaMerged == (r.realityGuardDecision.action != com.neuralcamera.quality.GuardAction.REVERT_TO_ORIGINAL))
+        assertTrue(r.appliedPipelineName, r.appliedPipelineName.contains(if (r.chromaMerged) "chroma merged" else "chroma from the reference"))
     }
 
     @Test
@@ -59,6 +61,7 @@ class ColourPipelineTest {
     fun framesWithoutChromaPlanesStayGrayAndSaySo() {
         val r = run(List(3) { frame(it, 0, 0, withChroma = false) })
         assertFalse(r.isColour)
+        assertFalse(r.chromaMerged)
         for (i in 0 until w * h) assertEquals(r.masterRgbPlane[i * 3], r.masterRgbPlane[i * 3 + 2])
     }
 

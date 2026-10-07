@@ -20,6 +20,8 @@ data class ProcessedImageResult(
     val appliedPipelineName: String,
     /** True when [masterRgbPlane] carries real colour (from the frame's chroma planes); false means R=G=B gray. */
     val isColour: Boolean = false,
+    /** Chroma was temporally merged (false: the reference frame's own chroma, or no chroma). */
+    val chromaMerged: Boolean = false,
     /** Per alternate frame: how much of it the temporal merge used (input for the quality engine). */
     val temporalStats: List<FrameMergeStats> = emptyList(),
     /** Every frame failed the quality checks and the sharpest was used as merge reference anyway. */

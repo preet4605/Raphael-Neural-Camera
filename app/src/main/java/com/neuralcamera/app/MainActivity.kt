@@ -201,7 +201,8 @@ class MainActivity : ComponentActivity() {
                 guardAction = result.realityGuardDecision.action.name,
                 blendRatio = result.realityGuardDecision.blendRatio,
                 referenceFallback = result.referenceFallback,
-                colour = result.isColour
+                colour = result.isColour,
+                chromaMerged = result.chromaMerged
             ),
             policy = decision.policy.id.name,
             policyOverride = decision.override

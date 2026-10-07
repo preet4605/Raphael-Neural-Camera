@@ -66,7 +66,9 @@ class TileWeights(val tilesX: Int, val tilesY: Int, val weights: FloatArray) {
 class MergeResult(
     /** Merged scene-referred linear values on the reference's normalized scale (can exceed 1 when brighter detail is recovered from shorter exposures). */
     val output: FloatPlane,
-    val frameStats: List<FrameMergeStats>
+    val frameStats: List<FrameMergeStats>,
+    /** Motion field of each alternate frame (reference excluded, frame order), for merging other planes along it. */
+    val fields: List<MotionField> = emptyList()
 )
 
 /** Per-worker scratch buffers for one tile. */
@@ -410,7 +412,9 @@ object TemporalMerge {
         val aligner = TileAligner(alignParams)
         val fields = arrayOfNulls<MotionField>(alts.size)
         Parallel.run(alts.size, threads) { index, _ -> fields[index] = aligner.align(refProxy, AlignmentProxy.of(alts[index]), altSeeds?.get(index)) }
-        return TemporalMerger.merge(ref, alts, fields.map { it!! }, noise, mergeParams, threads)
+        val aligned = fields.map { it!! }
+        val merged = TemporalMerger.merge(ref, alts, aligned, noise, mergeParams, threads)
+        return MergeResult(merged.output, merged.frameStats, aligned)
     }
 }
 
