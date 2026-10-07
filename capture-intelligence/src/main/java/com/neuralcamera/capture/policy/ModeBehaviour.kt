@@ -25,7 +25,7 @@ object ModeBehaviours {
         CameraShootingMode.AUTO -> ModeBehaviour(mode, QualityPolicyId.BALANCED, contrastCurve = true, mergeChroma = true,
             summary = "balanced burst, luma and chroma merged, display contrast curve")
         CameraShootingMode.PRO -> ModeBehaviour(mode, QualityPolicyId.BALANCED, contrastCurve = false, mergeChroma = true,
-            summary = "manual exposure honoured, luma and chroma merged, no contrast curve (flat for grading)")
+            summary = "luma and chroma merged, no contrast curve (flat for grading); manual ISO/shutter controls not wired yet")
         CameraShootingMode.MASTER -> ModeBehaviour(mode, QualityPolicyId.MAXIMUM, contrastCurve = true, mergeChroma = true,
             summary = "maximum burst budget, luma and chroma merged, display contrast curve; neural stages only once verified")
         CameraShootingMode.AUTHENTIC -> ModeBehaviour(mode, QualityPolicyId.BALANCED, contrastCurve = false, mergeChroma = false,

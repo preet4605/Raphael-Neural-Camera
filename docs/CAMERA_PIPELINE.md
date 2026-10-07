@@ -76,7 +76,7 @@ Every mode is captured -> reconstructed; thermal and battery overrides can only 
 | Mode | Policy | Luma | Chroma | Contrast curve |
 |---|---|---|---|---|
 | AUTO | BALANCED | merged | merged along luma motion | yes |
-| PRO | BALANCED (manual ISO/shutter honoured by the planner) | merged | merged | no (flat, for grading) |
+| PRO | BALANCED (manual ISO/shutter: the planner accepts them, but no UI control or capture request applies them yet) | merged | merged | no (flat, for grading) |
 | MASTER | MAXIMUM (larger burst budget) | merged | merged | yes |
 | AUTHENTIC | BALANCED | merged (noise averaging) | reference frame only | no |
 

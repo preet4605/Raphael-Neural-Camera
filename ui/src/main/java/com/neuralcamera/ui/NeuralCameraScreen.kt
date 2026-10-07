@@ -25,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -126,7 +125,7 @@ fun NeuralCameraScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "NEURAL",
+                        text = CapabilityPresentation.processingBadge(state.isNeuralActive, state.neuralBackendName),
                         color = StudioWhite,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -156,21 +155,18 @@ fun NeuralCameraScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val lenses = listOf(0.6f, 1.0f, 2.0f, 3.0f, 6.0f)
-                for (zoom in lenses) {
+                for (zoom in CapabilityPresentation.zoomButtons(state.supportedZoom)) {
                     val isSelected = (state.activeZoomFactor == zoom)
-                    val supported = state.supportedZoom?.let { zoom >= it.start - 1e-3f && zoom <= it.endInclusive + 1e-3f } ?: true
                     Box(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
                             .background(if (isSelected) PrecisionAmber else Color.Transparent)
-                            .alpha(if (supported) 1f else 0.35f)
                             .clickable { onZoomSelected(zoom) },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = if (zoom < 1.0f) ".6" else "${zoom.toInt()}x",
+                            text = CapabilityPresentation.zoomLabel(zoom),
                             color = if (isSelected) MatteBlack else StudioWhite,
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
@@ -254,14 +250,8 @@ fun NeuralCameraScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Gallery Thumbnail placeholder
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(DarkGunmetal)
-                            .border(1.dp, MutedSlate.copy(alpha = 0.4f), CircleShape)
-                    )
+                    // No gallery viewer or camera switch exists yet: keep their space, show no control for them.
+                    Spacer(modifier = Modifier.size(48.dp))
 
                     // Tactile Shutter Button
                     Box(
@@ -281,21 +271,7 @@ fun NeuralCameraScreen(
                         )
                     }
 
-                    // Camera Switch placeholder
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(DarkGunmetal),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "1x",
-                            color = MutedSlate,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
+                    Spacer(modifier = Modifier.size(48.dp))
                 }
             }
 
