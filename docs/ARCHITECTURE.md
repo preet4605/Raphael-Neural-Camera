@@ -3,12 +3,27 @@
 ## 1. High-Level Vision & Operating Philosophy
 Neural Camera is a rootless, device-adaptive computational photography platform built for modern Android devices. Its target is to function as a professional photographic instrument, combining modern Camera2 controls with hardware-accelerated neural image processing while maintaining strict fidelity to physical reality.
 
-Unlike naive camera applications that wrap camera previews with post-processing filters, Neural Camera treats capture as an integrated runtime graph:
-- Intelligently plans multi-frame exposures before shutter release.
-- Captures synchronized sensor telemetry (gyro, accel, exposure, timestamps).
-- Executes temporal alignment and neural/classical reconstruction on validated accelerators (Qualcomm QNN NPU, Vulkan GPU, XNNPACK CPU).
-- Inspects reconstructed images with Reality Guard to prevent synthetic hallucinations.
-- Non-destructively preserves the original sensor data alongside the Master photograph.
+Target design (goals, not current state; see [`AUDIT.md`](AUDIT.md) for what exists and [`PROOF_GATES.md`](PROOF_GATES.md) for what is proven):
+- Plan multi-frame exposures before shutter release. *(Contracts exist; not wired into capture.)*
+- Capture synchronized sensor telemetry (gyro, accel, exposure, timestamps). *(Synchronizer exists; not attached to burst frames.)*
+- Run temporal alignment and classical/neural reconstruction, using an accelerator only after it is proven on the device. *(Classical merge runs on the CPU; no accelerator is proven.)*
+- Check reconstructed images with Reality Guard. *(A heuristic divergence check, not hallucination detection.)*
+- Preserve the original capture alongside the master photograph. *(Today the "original" is the reference frame's luma as a gray JPEG, not sensor data; RAW exists only in the Gate 1 probe.)*
+
+### 1a. Pipeline paths (kept separate)
+
+| Path | Responsibility | Where | State |
+|---|---|---|---|
+| **LIVE PREVIEW** | Low-latency preview; no heavy processing on the preview stream | `RealCamera2Controller` repeating request → `SurfaceView` | Code exists, NOT_TESTED on device |
+| **CAPTURE PIPELINE** | Camera2 session, 3A, frame scheduling, RAW/YUV capture, metadata, burst orchestration | `camera-core` (Camera2), `capture-intelligence` `threea/`, `orchestration/`, `motion/`, `scene/`, `policy/` | YUV burst runs on AE auto; 3A/orchestration contracts are JVM-tested, not wired |
+| **COMPUTATIONAL PHOTOGRAPHY** | Alignment, quality assessment, temporal merge, RAW processing, HDR, neural restoration, colour | `neural-isp` `raw/`, `calibration/`, `temporal/`, `color/`; `quality-engine` `frame/`; `neural-runtime` | Merge/colour/RAW front end JVM-tested on synthetic data; HDR and neural restoration missing |
+| **OUTPUT + GALLERY** | JPEG/HEIF/Ultra HDR, metadata, atomic storage, indexing, review | `neural-isp` `encode/`; `gallery` `storage/`, `provenance/` | JPEG/DNG encoders and atomic storage exist; HEIF/Ultra HDR missing |
+| **AI STUDIO** | Creative/generative pipeline, never mixed with normal capture | not implemented | `PipelinePath.AI_STUDIO` is the only path allowed to record `ContentOrigin.GENERATED`; enforced by `ProvenanceRecord` and `SchedulingPolicy` |
+
+Cross-cutting contracts: `models` `execution/` (SUCCESS / DEGRADED / FAILED stage outcomes, evidence states, pipeline
+paths, content origin) and `neural-runtime` `registry/` (model artifacts, checksums, QNN pairing, rollback).
+Normal camera modes are reality-preserving: captured → reconstructed. A fallback is always reported as DEGRADED with
+both the intended and the actual implementation.
 
 ---
 
@@ -159,14 +174,15 @@ In adherence to Section 18 of the Constitution:
 - **NeuralMaster**: Final calibrated image with high perceptual fidelity.
 - **Metadata**: JSON capture & processing telemetry saved alongside image files.
 - **TemporaryProcessingData**: Transient scratch buffers deleted immediately after fusion completes.
-- **Invariant**: The original capture is never overwritten or destroyed, ensuring user photographic data is permanently safeguarded.
+- **Invariant**: The original capture is never overwritten or destroyed. Enforced by `AtomicMediaStore` (journal + temp file + atomic rename, refuses existing names, recovers on start). Behaviour under real power loss on the device: NOT_TESTED.
+- **Current reality**: the app's "original" is the reference frame's luma encoded as a gray JPEG, not sensor data.
 
 ---
 
 ## 8. Phase Status, Phase 1 Implementation & Scope Boundary
 
 - **Current state**: Phase 0 (foundation) and Phase 1 (hardware discovery / device profile) are complete in code. **Phase 2 (neural runtime foundation) is IN PROGRESS: the backends and the Gate 2 harness exist but have never run on the device.** Earlier commit messages calling Phase 2 complete were wrong when written. All proof flags are `FALSE`; see [`PROOF_GATES.md`](PROOF_GATES.md).
-- **Known gaps in the Phase 1 list below**: `triggerBurstCapture` returns no frames (no burst acquisition); the diagnostics sheet fields read `N/A` until measured; the committed OnePlus 15 profile data is **UNVERIFIED** (no raw audit logs; its timestamps contradict its folder name); no encoder produces valid JPEG/DNG.
+- **Known gaps** (full list in [`AUDIT.md`](AUDIT.md)): the YUV burst runs without precapture, convergence wait or 3A lock; the diagnostics sheet fields read `N/A` until measured; the committed OnePlus 15 profile data is **UNVERIFIED** (no raw audit logs; its timestamps contradict its folder name); the zero-copy audit is a design expectation, not a measurement.
 
 - **Phase 1 Scope Completed**:
   - Real Camera2 capability resolver (`DeviceCapabilityResolver`) interrogating identity, sensor active array, focal lengths, apertures, 3A modes, stream formats, dynamic range profiles, stream use cases, and Android 16 capabilities.
@@ -174,11 +190,11 @@ In adherence to Section 18 of the Constitution:
   - Stream configuration engine (`CameraSessionPlanner`) with capability-aware stream size selectors.
   - Development stream test matrix (`StreamMatrixTester`) recording `SUPPORTED`, `SESSION_CREATION_SUCCESS`, `ACTUAL_CAPTURE_SUCCESS`, and `FAILED`.
   - Live hardware preview pipeline via `SurfaceView` (`CameraViewport`) preserving Leica/Zeiss minimalist aesthetic.
-  - Production-safe `ImageReaderManager` with backpressure control, guaranteed image closure, and leak accounting.
+  - `ImageReaderManager` with backpressure control, image closure and leak accounting (NOT_TESTED on device).
   - Real `CapturedFrame` model supporting temporal pipelines with synchronized IMU telemetry.
   - Decoupled `CaptureResultAssociator` tolerating delayed metadata, delayed images, and dropped frames.
   - `SensorTimelineSynchronizer` validating `CLOCK_BOOTTIME` domain and interpolating gyro/accel samples.
-  - `ZeroCopyAuditor` auditing memory movements and evaluating zero-copy gates.
+  - `ZeroCopyAuditor` listing the buffer movements the design expects (not measured; zero-copy NOT_PROVEN).
   - Debug camera diagnostic sheet (`CameraDiagnosticsSheet`) with all 20 required telemetry fields (each reads `N/A` until a real measurement populates it).
   - Deterministic state machine integration and bounded error recovery in `RealCamera2Controller`.
   - ADB developer tooling (`tools/camera_dev_tools.sh`).

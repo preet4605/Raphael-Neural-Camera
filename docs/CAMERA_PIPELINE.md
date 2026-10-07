@@ -1,5 +1,11 @@
 # Camera Acquisition & Processing Pipeline
 
+> **Status:** §1 is the target graph. What runs today: Camera2 preview + YUV_420_888 burst on AE/AF/AWB auto (no
+> precapture, convergence wait or lock) → luma temporal merge on the CPU → heuristic Reality Guard → JPEG via
+> `AtomicMediaStore` + MediaStore. Not wired: `BoundedRingFrameRepository`, IMU association, `UniversalCapturePlanner`
+> exposure values, the new 3A/orchestration/motion/scene/policy contracts. Reality Guard is not hallucination detection,
+> and the stored "original" is the reference luma, not a sensor plane. See [`AUDIT.md`](AUDIT.md).
+
 ## 1. Pipeline Graph & Dataflow Architecture
 The camera acquisition pipeline isolates high-rate sensor frame acquisition from presentation, inference, and storage:
 
