@@ -27,6 +27,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -74,6 +80,7 @@ fun NeuralCameraScreen(
     onSurfaceAvailable: (Surface) -> Unit = {},
     onSurfaceDestroyed: () -> Unit = {}
 ) {
+    val haptics = LocalHapticFeedback.current
     NeuralCameraTheme {
         Box(
             modifier = Modifier
@@ -140,7 +147,10 @@ fun NeuralCameraScreen(
                     color = PrecisionAmber,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.clickable { onToggleDiagnostics() }
+                    // Vertical padding brings the touch target to 48 dp; the bar is 64 dp tall.
+                    modifier = Modifier
+                        .clickable(role = Role.Button) { onToggleDiagnostics() }
+                        .padding(vertical = 18.dp, horizontal = 4.dp)
                 )
             }
 
@@ -151,27 +161,42 @@ fun NeuralCameraScreen(
                     .padding(bottom = 182.dp)
                     .clip(RoundedCornerShape(20.dp))
                     .background(DarkGunmetal.copy(alpha = 0.75f))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(horizontal = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 for (zoom in CapabilityPresentation.zoomButtons(state.supportedZoom)) {
                     val isSelected = (state.activeZoomFactor == zoom)
+                    // 48 dp touch target around a 36 dp chip.
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
-                            .background(if (isSelected) PrecisionAmber else Color.Transparent)
-                            .clickable { onZoomSelected(zoom) },
+                            .clickable(role = Role.Button) {
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onZoomSelected(zoom)
+                            }
+                            .semantics {
+                                contentDescription = CapabilityPresentation.zoomDescription(zoom, isSelected)
+                                selected = isSelected
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = CapabilityPresentation.zoomLabel(zoom),
-                            color = if (isSelected) MatteBlack else StudioWhite,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            fontFamily = FontFamily.Monospace
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(if (isSelected) PrecisionAmber else Color.Transparent),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = CapabilityPresentation.zoomLabel(zoom),
+                                color = if (isSelected) MatteBlack else StudioWhite,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
                     }
                 }
             }
@@ -233,9 +258,11 @@ fun NeuralCameraScreen(
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             letterSpacing = 1.2.sp,
                             fontFamily = FontFamily.Monospace,
+                            // 13 sp text + 2 x 16 dp padding reaches the 48 dp minimum touch height.
                             modifier = Modifier
-                                .clickable { onModeSelected(mode) }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .clickable(role = Role.Tab) { onModeSelected(mode) }
+                                .semantics { selected = isSelected }
+                                .padding(horizontal = 8.dp, vertical = 16.dp)
                         )
                     }
                 }
@@ -260,7 +287,11 @@ fun NeuralCameraScreen(
                             .clip(CircleShape)
                             .border(3.5.dp, StudioWhite, CircleShape)
                             .padding(6.dp)
-                            .clickable(enabled = !state.isCapturing) { onShutterPressed() },
+                            .clickable(enabled = !state.isCapturing, onClickLabel = "Take photo", role = Role.Button) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onShutterPressed()
+                            }
+                            .semantics { contentDescription = if (state.isCapturing) "Shutter, capturing" else "Shutter" },
                         contentAlignment = Alignment.Center
                     ) {
                         Box(
